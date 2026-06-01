@@ -1,0 +1,729 @@
+* {
+  box-sizing: border-box;
+}
+
+/*
+  页面默认有一些浏览器自带的间距。
+  margin: 0 可以把这些默认间距清掉，让我们自己完全控制布局。
+*/
+body {
+  min-height: 100vh;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #ffffff;
+  background: #ffffff;
+}
+
+/*
+  左上角的小选择按钮。
+  position: fixed 表示它固定在浏览器窗口左上角，不会跟着播放器布局移动。
+  z-index: 10 确保它盖在其他内容上方，避免被播放器挡住。
+*/
+.select-button {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #6b7280;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/*
+  鼠标移到选择按钮上时稍微变灰。
+  这样用户能知道它可以点击，但整体仍然保持“不显眼”。
+*/
+.select-button:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+/*
+  真正的文件 input 很难统一美化。
+  所以这里把它缩到 1 像素并裁剪掉，保留外面的 label 作为自定义按钮。
+*/
+.select-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* 页面保留灰白背景，并把主要内容放在左中位置。 */
+.app {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 40px 48px;
+}
+
+/* 左侧播放器和右侧摄像头预览组成一个工作区。 */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1440px) 720px;
+  gap: 24px;
+  align-items: start;
+  max-width: calc(100vw - 96px);
+}
+
+/* 播放器外壳改回固定尺寸，比最初版本更大。 */
+.player {
+  width: 100%;
+  max-width: 1440px;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  border: 1px solid #ffffff;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+/* 顶部区域现在只显示视频标题文本，不再放选择文件按钮。 */
+.player-topbar {
+  display: flex;
+  align-items: center;
+  padding: 0px 0px;
+  border-bottom: 1px solid #ffffff;
+  background: #ffffff;
+}
+
+/*
+  视频标题文本。
+  这里沿用之前标题按钮的位置和大小，让标题还在原来的地方。
+  它只是普通文字，所以没有 cursor: pointer，也没有 hover 点击反馈。
+*/
+.title-text {
+  min-width: 0;
+  max-width: 100%;
+  padding: 20px 0px;
+  color: #111111;
+  font-size: 28px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 视频区域填满顶部栏之外的所有空间。 */
+.screen {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #ffffff;
+  aspect-ratio: 16 / 9;
+}
+
+/* 新增：video-area 是视频、占位文字和弹幕层共同的定位容器。 */
+.video-area {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+/* 未选择有效视频前，本地播放器的 video 元素保持隐藏。 */
+#videoPlayer {
+  display: none;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  object-fit: contain;
+}
+
+#videoPlayer.has-video {
+  display: block;
+}
+
+/* 未选择视频时显示的占位提示。 */
+.placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #ffffff;
+  font-size: 1rem;
+  text-align: center;
+  background: #ffffff;
+}
+
+.placeholder.hidden {
+  display: none;
+}
+
+/*
+  新增：弹幕显示层。
+  position: absolute + inset: 0 让它完整覆盖视频区域。
+  overflow: hidden 确保弹幕只在视频区域内部出现。
+  pointer-events: none 确保弹幕层不会挡住鼠标点击视频或控制栏。
+*/
+.danmaku-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/*
+  新增：单条弹幕的基础样式。
+  JavaScript 会动态创建 .danmaku-item，并设置它的 top 位置。
+*/
+.danmaku-item {
+  position: absolute;
+  right: 0;
+  color: #ffffff;
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.2;
+  opacity: 0.8;
+  white-space: nowrap;
+  animation-name: danmaku-move;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.danmaku-layer.paused .danmaku-item {
+  animation-play-state: paused;
+}
+
+/* 弹幕从右侧稍微露出的位置进入，并移动到视频左侧外面。 */
+@keyframes danmaku-move {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(calc(-100vw - 100%));
+  }
+}
+
+/* 固定在视频下方的控制栏，始终可见。 */
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  background: #ffffff;
+  color: #111111;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/*
+  图标按钮的通用样式。
+  播放、全屏、声音这三个按钮都使用这个样式。
+  按钮本身尽量简单，真正看到的是里面的图片。
+*/
+.icon-button {
+  width: 50px;
+  height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.icon-button:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+/*
+  控制按钮里的图片。
+  width 和 height 控制图标大小。
+  display: block 可以去掉图片下方默认的小空隙。
+*/
+.control-icon {
+  width: 30px;
+  height: 30px;
+  display: block;
+  object-fit: contain;
+}
+
+/*
+  弹幕开关和弹幕设置按钮单独使用这个类。
+  这样它们以后可以独立调整尺寸，不会影响 play / voice / full screen。
+*/
+.danmaku-control-icon {
+  width: 35px;
+  height: 35px;
+  display: block;
+  object-fit: contain;
+}
+
+#danmakuToggleButton {
+  margin-left: 20px;
+}
+
+#danmakuSettingsButton {
+  margin-left: -4px;
+}
+
+.danmaku-settings-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.danmaku-settings-wrapper::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 50px;
+  width: 260px;
+  height: 22px;
+  transform: translateX(-50%);
+}
+
+.danmaku-settings-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  z-index: 20;
+  width: 260px;
+  padding: 14px 16px;
+  border-radius: 6px;
+  color: #D3D3D2;
+  background: #2f2f2f;
+  box-shadow: 0 8px 24px rgba(17, 17, 17, 0.22);
+  transform: translateX(-50%);
+}
+
+.danmaku-settings-wrapper:hover .danmaku-settings-panel {
+  display: block;
+}
+
+.danmaku-setting-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.danmaku-setting-row:last-child {
+  margin-bottom: 0;
+}
+
+.danmaku-setting-value {
+  color: #D3D3D2;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.danmaku-setting-bar {
+  --setting-percent: 50%;
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 16px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.danmaku-setting-bar::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #1E96FC 0%,
+    #1E96FC var(--setting-percent),
+    #E9E9EB var(--setting-percent),
+    #E9E9EB 100%
+  );
+}
+
+.danmaku-setting-bar::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -5px;
+  appearance: none;
+  border: 0;
+  border-radius: 50%;
+  background: #D3D3D2;
+  box-shadow: 0 2px 8px rgba(17, 17, 17, 0.35);
+}
+
+/* 时间文本固定宽度，避免播放时控制栏左右跳动。 */
+.time-text {
+  width: 112px;
+  color: #111111;
+  font-size: 16px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+/* 进度条占据控制栏中间的主要空间。 */
+.progress-bar {
+  --progress-percent: 0%;
+  flex: 1;
+  min-width: 120px;
+  height: 16px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Chrome 使用这一组选择器控制 range 的轨道。 */
+.progress-bar::-webkit-slider-runnable-track,
+.volume-bar::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #E9E9EB;
+}
+
+/* 进度条已播放部分为蓝色，未播放部分为灰色。 */
+.progress-bar::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    #1E96FC 0%,
+    #1E96FC var(--progress-percent),
+    #E9E9EB var(--progress-percent),
+    #E9E9EB 100%
+  );
+}
+
+/* Chrome 使用这一组选择器控制 range 的白色圆点。 */
+.progress-bar::-webkit-slider-thumb,
+.volume-bar::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -5px;
+  appearance: none;
+  border: 0;
+  border-radius: 50%;
+  background: #1E96FC;
+  box-shadow: 0 2px 8px rgba(17, 17, 17, 0.35);
+}
+
+.progress-bar:disabled {
+  cursor: not-allowed;
+}
+
+/*
+  新增：弹幕输入区域。
+  它放在进度条后、音量按钮前，整体保持紧凑。
+*/
+
+.danmaku-form {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 330px;
+}
+
+.danmaku-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0 66px 0 48px;
+  border: 1px solid #E9E9EB;
+  border-radius: 5px;
+  color: #111111;
+  background: #E9E9EB;
+  font-size: 16px;
+  font-weight: 520;
+  outline: none;
+  margin-left: 5px;
+}
+
+.danmaku-form.danmaku-off .danmaku-input {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.danmaku-input:focus {
+  border-color: #1E96FC;
+}
+
+.danmaku-input:disabled {
+  color: #737373;
+  cursor: not-allowed;
+}
+
+.danmaku-send-button {
+  position: absolute;
+  right: 0px;
+  top: 50%;
+  z-index: 1;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 3px;
+  color: #ffffff;
+  background: #1E96FC;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.danmaku-send-button:hover:not(:disabled) {
+  background: #dcdcdf;
+}
+
+.danmaku-send-button:disabled {
+  color: #ffffff;
+  cursor: not-allowed;
+}
+
+.danmaku-form.danmaku-off .danmaku-send-button {
+  display: none;
+}
+
+.danmaku-style-button {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.danmaku-form.danmaku-off .danmaku-style-button {
+  display: none;
+}
+
+.danmaku-style-icon {
+  width: 40px;
+  height: 40px;
+  display: block;
+  object-fit: contain;
+}
+
+/* 音量条左侧蓝色表示当前音量。 */
+.volume-bar::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    #1E96FC 0%,
+    #1E96FC var(--volume-percent),
+    #E9E9EB var(--volume-percent),
+    #E9E9EB 100%
+  );
+}
+
+/*
+  声音按钮和竖直音量条的外层容器。
+  position: relative 是为了让音量条可以相对于声音按钮定位。
+*/
+.volume-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 20px;
+}
+
+/*
+  透明的 hover 桥接区域。
+  音量面板在 voice 按钮上方，中间有一段空隙。
+  如果没有这个透明区域，鼠标从按钮移动到面板时可能会短暂离开 volume-wrapper，
+  导致面板还没来得及进入就被隐藏。
+*/
+.volume-wrapper::before {
+  content: "";
+  position: absolute;
+  right: 50%;
+  bottom: 50px;
+  width: 58px;
+  height: 64px;
+  transform: translateX(50%);
+}
+
+/*
+  音量面板。
+  它是一个偏暗的长方形背景，没有边框，也没有阴影。
+  音量百分比和音量条都放在这个背景里面。
+*/
+.volume-panel {
+  position: absolute;
+  right: 50%;
+  bottom: 64px;
+  width: 58px;
+  height: 150px;
+  display: block;
+  padding: 12px 0;
+  border: 0;
+  border-radius: 0;
+  background: #2f2f2f;
+  box-shadow: none;
+  transform: translateX(50%);
+}
+
+/* 音量百分比文字，最大显示 100%。 */
+.volume-percent {
+  display: block;
+  color: #D3D3D2;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+}
+
+/*
+  竖直音量条。
+  它放在 volume-panel 背景里面，不再单独悬浮在外面。
+  因为 range 本质上还是横向控件，rotate(-90deg) 只改变视觉方向，
+  不改变它在普通布局里的占位方式。
+  所以这里用 absolute 明确指定它在面板里的位置，避免和百分比重叠。
+*/
+.volume-bar {
+  --volume-percent: 100%;
+  position: absolute;
+  top: 82px;
+  left: 46%;
+  width: 90px;
+  height: 16px;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  transform-origin: center;
+}
+
+/* hidden 类专门用来隐藏音量条。 */
+.hidden {
+  display: none;
+}
+
+/*
+  右侧摄像头预览区。
+  宽度设置为 720px，比左侧主视频小，位置和左侧视频区域顶部对齐。
+*/
+.camera-panel {
+  position: relative;
+  width: 720px;
+  max-width: 100%;
+  margin-top: 83px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #111111;
+  aspect-ratio: 16 / 9;
+}
+
+/*
+  摄像头 video 始终显示。
+  scaleX(-1) 会让摄像头看起来像镜子，更符合用户看自己摄像头时的直觉。
+*/
+#cameraPreview {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+/* 摄像头还没有启动或启动失败时显示的文字。 */
+.camera-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #ffffff;
+  background: #111111;
+  font-size: 16px;
+  text-align: center;
+}
+
+.camera-status.hidden {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .app {
+    padding: 16px;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .player {
+    width: 100%;
+    height: auto;
+    min-height: 360px;
+  }
+
+  .player-topbar {
+    padding: 12px;
+  }
+
+  .title-text {
+    min-height: 36px;
+    max-width: 100%;
+    padding: 0 12px;
+    font-size: 0.85rem;
+  }
+
+  .screen {
+    min-height: 300px;
+  }
+
+  .player-controls {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .progress-bar {
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  .danmaku-form {
+    order: 3;
+    width: 100%;
+  }
+
+  .danmaku-input {
+    flex: 1;
+    width: auto;
+  }
+
+  .volume-wrapper {
+    margin-left: auto;
+  }
+
+  .camera-panel {
+    width: 100%;
+    margin-top: 0;
+  }
+}

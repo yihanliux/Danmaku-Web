@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Local Player</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!--
+    这个小按钮专门负责选择本地视频文件。
+    它被放在整个界面的左上角，并且样式比较低调，避免抢走视频标题和播放器的视觉焦点。
+    label 的 for="videoInput" 会连接到里面隐藏的 input。
+    用户点击这个 label 时，浏览器就会打开文件选择窗口。
+  -->
+  <label class="select-button" for="videoInput">
+    Select Video
+    <input
+      id="videoInput"
+      type="file"
+      accept="video/mp4, video/webm, video/ogg, video/*"
+    >
+  </label>
+
+  <!--
+    页面主体区域。
+    左边是本地视频播放器，右边是摄像头实时预览画面。
+    这里用 main 标签表示这是页面的主要内容。
+  -->
+  <main class="app">
+    <div class="workspace">
+      <section class="player" aria-label="Local video player">
+        <header class="player-topbar">
+          <!--
+            这里现在只显示视频名字，是普通文本，不再是按钮。
+            未选择视频时显示 Select Video。
+            选择视频后，JavaScript 会把这里的文字改成视频文件名。
+            它仍然放在之前那个位置，所以页面布局不会发生明显变化。
+          -->
+          <div id="videoTitle" class="title-text">Please Select Video</div>
+        </header>
+
+        <!--
+          视频画面区域。
+          video 标签是真正播放视频的地方。
+          preload="metadata" 表示浏览器先读取视频的基本信息，例如总时长。
+          controls 没有写在这里，因为我们下面已经自己做了固定显示的控制栏。
+        -->
+        <div class="screen">
+          <!-- 新增：video-area 是视频和弹幕层共同的定位容器。 -->
+          <div class="video-area">
+            <video id="videoPlayer" preload="metadata">
+              Your browser does not support the video tag.
+            </video>
+            <!-- 新增：弹幕显示层，只负责显示飞过的视频评论，不放在控制栏里。 -->
+            <div id="danmakuLayer" class="danmaku-layer" aria-hidden="true"></div>
+            <div id="placeholder" class="placeholder">No video selected</div>
+          </div>
+        </div>
+
+        <!--
+          自定义控制栏固定放在视频下方。
+          这样播放按钮和进度条不会像浏览器原生 controls 那样自动隐藏。
+          disabled 表示没有选择视频之前，这些控件不能点击。
+          JavaScript 会在视频加载成功后把 disabled 去掉。
+        -->
+        <div class="player-controls" aria-label="Video controls">
+          <!--
+            第 1 个控件：播放/暂停按钮。
+            按钮里面放的是图片，不再显示文字。
+            默认显示 play.png。
+            当视频开始播放后，JavaScript 会把图片换成 pause.png。
+          -->
+          <button id="playButton" class="icon-button" type="button" disabled aria-label="Play">
+            <img id="playIcon" class="control-icon" src="src/play.png" alt="">
+          </button>
+
+          <!--
+            第 2 个控件：时间文本。
+            这里把“当前播放时间”和“视频总时长”放在同一个位置。
+            例如 02:23 / 05:50。
+          -->
+          <span id="timeDisplay" class="time-text">00:00 / 00:00</span>
+
+          <!--
+            第 3 个控件：进度条。
+            样式先沿用原来的 range 进度条，只调整它在控制栏中的位置。
+          -->
+          <input
+            id="progressBar"
+            class="progress-bar"
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            step="0.1"
+            disabled
+            aria-label="Video progress"
+          >
+
+          <!--
+            第 4 组控件：弹幕开关、弹幕设置、弹幕样式和弹幕输入。
+            顺序是：
+            Danmaku open/close → Danmaku Settings1/2 → Danmaku Style + input。
+            弹幕开时显示 open、Settings1、Style。
+            弹幕关时显示 close、Settings2，并隐藏 Style。
+          -->
+          <button id="danmakuToggleButton" class="icon-button" type="button" aria-label="Danmaku on">
+            <img id="danmakuToggleIcon" class="danmaku-control-icon" src="src/Danmaku open.png" alt="">
+          </button>
+
+          <div class="danmaku-settings-wrapper">
+            <button id="danmakuSettingsButton" class="icon-button" type="button" aria-label="Danmaku settings">
+              <img id="danmakuSettingsIcon" class="danmaku-control-icon" src="src/Danmaku Settings1.png" alt="">
+            </button>
+            <div id="danmakuSettingsPanel" class="danmaku-settings-panel hidden">
+              <label class="danmaku-setting-row">
+                <span class="danmaku-setting-label">Display Area</span>
+                <span id="danmakuAreaValue" class="danmaku-setting-value">25%</span>
+                <input id="danmakuAreaBar" class="danmaku-setting-bar" type="range" min="0" max="100" value="25">
+              </label>
+
+              <label class="danmaku-setting-row">
+                <span class="danmaku-setting-label">Opacity</span>
+                <span id="danmakuOpacityValue" class="danmaku-setting-value">80%</span>
+                <input id="danmakuOpacityBar" class="danmaku-setting-bar" type="range" min="0" max="100" value="80">
+              </label>
+
+              <label class="danmaku-setting-row">
+                <span class="danmaku-setting-label">Font Size</span>
+                <span id="danmakuFontSizeValue" class="danmaku-setting-value">50%</span>
+                <input id="danmakuFontSizeBar" class="danmaku-setting-bar" type="range" min="0" max="100" value="50">
+              </label>
+
+              <label class="danmaku-setting-row">
+                <span class="danmaku-setting-label">Speed</span>
+                <span id="danmakuSpeedValue" class="danmaku-setting-value">50%</span>
+                <input id="danmakuSpeedBar" class="danmaku-setting-bar" type="range" min="0" max="100" value="50">
+              </label>
+            </div>
+          </div>
+
+          <div id="danmakuForm" class="danmaku-form danmaku-on" aria-label="Danmaku input">
+            <button id="danmakuStyleButton" class="danmaku-style-button" type="button" aria-label="Danmaku style">
+              <img class="danmaku-style-icon" src="src/Danmaku Style.png" alt="">
+            </button>
+            <input
+              id="danmakuInput"
+              class="danmaku-input"
+              type="text"
+              placeholder="Comment on this moment"
+              autocomplete="off"
+            >
+            <button id="danmakuSendButton" class="danmaku-send-button" type="button">
+              Send
+            </button>
+          </div>
+
+          <!--
+            第 5 个控件：声音按钮。
+            点击 voice 图片后，才显示音量面板。
+            音量面板里有百分比文字和竖直音量条。
+            鼠标移出音量面板后，JavaScript 会把面板隐藏。
+          -->
+          <div class="volume-wrapper">
+            <button id="voiceButton" class="icon-button" type="button" aria-label="Volume">
+              <img class="control-icon" src="src/voice.png" alt="">
+            </button>
+            <div id="volumePanel" class="volume-panel hidden">
+              <span id="volumePercent" class="volume-percent">100%</span>
+              <input
+                id="volumeBar"
+                class="volume-bar"
+                type="range"
+                min="0"
+                max="1"
+                value="1"
+                step="0.05"
+                aria-label="Volume"
+              >
+            </div>
+          </div>
+
+          <!--
+            第 6 个控件：全屏按钮。
+            点击后让播放器进入全屏模式。
+          -->
+          <button id="fullscreenButton" class="icon-button" type="button" aria-label="Full screen">
+            <img class="control-icon" src="src/full screen.png" alt="">
+          </button>
+        </div>
+      </section>
+
+      <!--
+        右侧摄像头区域。
+        autoplay 表示拿到摄像头画面后自动播放。
+        muted 可以避免浏览器因为自动播放策略阻止它播放。
+        playsinline 主要是为了移动端浏览器不要强制全屏播放。
+      -->
+      <aside class="camera-panel" aria-label="Camera preview">
+        <video id="cameraPreview" autoplay muted playsinline></video>
+        <div id="cameraStatus" class="camera-status">Camera loading...</div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

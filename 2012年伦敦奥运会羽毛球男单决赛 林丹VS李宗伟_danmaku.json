@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "videoName": "2012年伦敦奥运会羽毛球男单决赛 林丹VS李宗伟.mp4",
+  "items": [
+    {
+      "id": "sample-001",
+      "text": "开场来了",
+      "time": 0.32,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:01.000Z"
+    },
+    {
+      "id": "sample-002",
+      "text": "这个画面很清楚",
+      "time": 0.61,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:02.000Z"
+    },
+    {
+      "id": "sample-003",
+      "text": "第一秒注意看",
+      "time": 0.94,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:03.000Z"
+    },
+    {
+      "id": "sample-004",
+      "text": "节奏开始了",
+      "time": 1.18,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:04.000Z"
+    },
+    {
+      "id": "sample-005",
+      "text": "这里可以加重点提示",
+      "time": 1.52,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:05.000Z"
+    },
+    {
+      "id": "sample-006",
+      "text": "弹幕测试 1",
+      "time": 1.87,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:06.000Z"
+    },
+    {
+      "id": "sample-007",
+      "text": "画面右侧会飞过去",
+      "time": 2.05,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:07.000Z"
+    },
+    {
+      "id": "sample-008",
+      "text": "这个位置不错",
+      "time": 2.39,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:08.000Z"
+    },
+    {
+      "id": "sample-009",
+      "text": "弹幕测试 2",
+      "time": 2.76,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:09.000Z"
+    },
+    {
+      "id": "sample-010",
+      "text": "前 10 秒样例",
+      "time": 3.02,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:10.000Z"
+    },
+    {
+      "id": "sample-011",
+      "text": "这里可以互动",
+      "time": 3.31,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:11.000Z"
+    },
+    {
+      "id": "sample-012",
+      "text": "发送一条试试",
+      "time": 3.68,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:12.000Z"
+    },
+    {
+      "id": "sample-013",
+      "text": "弹幕测试 3",
+      "time": 4.01,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:13.000Z"
+    },
+    {
+      "id": "sample-014",
+      "text": "注意进度条",
+      "time": 4.24,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:14.000Z"
+    },
+    {
+      "id": "sample-015",
+      "text": "这个系统越来越完整",
+      "time": 4.59,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:15.000Z"
+    },
+    {
+      "id": "sample-016",
+      "text": "样例弹幕 A",
+      "time": 4.93,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:16.000Z"
+    },
+    {
+      "id": "sample-017",
+      "text": "样例弹幕 B",
+      "time": 5.16,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:17.000Z"
+    },
+    {
+      "id": "sample-018",
+      "text": "前面十秒很适合演示",
+      "time": 5.44,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:18.000Z"
+    },
+    {
+      "id": "sample-019",
+      "text": "这里会有很多弹幕",
+      "time": 5.81,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:19.000Z"
+    },
+    {
+      "id": "sample-020",
+      "text": "弹幕测试 4",
+      "time": 6.07,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:20.000Z"
+    },
+    {
+      "id": "sample-021",
+      "text": "现在是第六秒附近",
+      "time": 6.35,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:21.000Z"
+    },
+    {
+      "id": "sample-022",
+      "text": "保持可读性很重要",
+      "time": 6.72,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:22.000Z"
+    },
+    {
+      "id": "sample-023",
+      "text": "白字黑影看得清",
+      "time": 7.03,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:23.000Z"
+    },
+    {
+      "id": "sample-024",
+      "text": "弹幕测试 5",
+      "time": 7.28,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:24.000Z"
+    },
+    {
+      "id": "sample-025",
+      "text": "这条在七秒多",
+      "time": 7.66,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:25.000Z"
+    },
+    {
+      "id": "sample-026",
+      "text": "再来一条随机评论",
+      "time": 8.04,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:26.000Z"
+    },
+    {
+      "id": "sample-027",
+      "text": "快到第九秒了",
+      "time": 8.47,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:27.000Z"
+    },
+    {
+      "id": "sample-028",
+      "text": "弹幕测试 6",
+      "time": 8.91,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:28.000Z"
+    },
+    {
+      "id": "sample-029",
+      "text": "最后几条样例",
+      "time": 9.34,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:29.000Z"
+    },
+    {
+      "id": "sample-030",
+      "text": "第十秒前结束",
+      "time": 9.82,
+      "style": "default",
+      "createdAt": "2026-05-29T00:00:30.000Z"
+    }
+  ]
+}
