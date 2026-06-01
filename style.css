@@ -71,9 +71,10 @@ body {
 /* 左侧播放器和右侧摄像头预览组成一个工作区。 */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1440px) 720px;
+  grid-template-columns: minmax(0, 1fr) clamp(280px, 28vw, 720px);
   gap: 24px;
   align-items: start;
+  width: 100%;
   max-width: calc(100vw - 96px);
 }
 
@@ -626,7 +627,7 @@ body {
 */
 .camera-panel {
   position: relative;
-  width: 720px;
+  width: 100%;
   max-width: 100%;
   margin-top: 83px;
   overflow: hidden;
@@ -660,8 +661,48 @@ body {
   text-align: center;
 }
 
-.camera-status.hidden {
-  display: none;
+  .camera-status.hidden {
+    display: none;
+  }
+
+@media (max-width: 1200px) {
+  .app {
+    padding: 28px 32px;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) clamp(240px, 26vw, 360px);
+    gap: 18px;
+    max-width: calc(100vw - 64px);
+  }
+
+  .player-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .progress-bar {
+    min-width: 180px;
+  }
+
+  .danmaku-form {
+    width: 280px;
+  }
+
+  .camera-panel {
+    margin-top: 72px;
+  }
+}
+
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-panel {
+    width: min(100%, 520px);
+    margin-top: 0;
+  }
 }
 
 @media (max-width: 640px) {
