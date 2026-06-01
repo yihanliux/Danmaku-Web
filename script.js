@@ -304,6 +304,16 @@ function mapRange(value, inputMin, inputMax, outputMin, outputMax) {
   return outputMin + ratio * (outputMax - outputMin);
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getResponsiveDanmakuFontSize() {
+  const layerWidth = danmakuLayer.clientWidth || window.innerWidth;
+  const scale = clampNumber(layerWidth / 960, 0.58, 1);
+  return Math.round(danmakuFontSize * scale);
+}
+
 function updateSettingBarDisplay(bar, valueElement) {
   const percent = Math.round(Number(bar.value));
   valueElement.textContent = `${percent}%`;
@@ -323,7 +333,7 @@ function updateDanmakuSettings() {
 
   document.querySelectorAll(".danmaku-item").forEach((item) => {
     item.style.opacity = String(danmakuOpacity);
-    item.style.fontSize = `${danmakuFontSize}px`;
+    item.style.fontSize = `${getResponsiveDanmakuFontSize()}px`;
   });
 }
 
@@ -433,7 +443,7 @@ function createDanmakuItem(text) {
   item.className = "danmaku-item";
   item.textContent = text;
   item.style.opacity = String(danmakuOpacity);
-  item.style.fontSize = `${danmakuFontSize}px`;
+  item.style.fontSize = `${getResponsiveDanmakuFontSize()}px`;
   item.style.animationDuration = `${danmakuAnimationDuration}s`;
 
   danmakuLayer.appendChild(item);
@@ -761,6 +771,8 @@ danmakuSettingsWrapper.addEventListener("mouseleave", () => {
 [danmakuAreaBar, danmakuOpacityBar, danmakuFontSizeBar, danmakuSpeedBar].forEach((bar) => {
   bar.addEventListener("input", updateDanmakuSettings);
 });
+
+window.addEventListener("resize", updateDanmakuSettings);
 
 // 新增：点击弹幕开关按钮时，切换是否显示弹幕。
 danmakuToggleButton.addEventListener("click", () => {

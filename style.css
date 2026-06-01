@@ -187,12 +187,16 @@ body {
 .danmaku-item {
   position: absolute;
   right: 0;
+  max-width: none;
   color: #ffffff;
   font-size: 30px;
   font-weight: 500;
   line-height: 1.2;
   opacity: 0.8;
+  overflow: visible;
+  overflow-wrap: normal;
   white-space: nowrap;
+  word-break: keep-all;
   animation-name: danmaku-move;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
@@ -689,6 +693,14 @@ body {
     width: 280px;
   }
 
+  .danmaku-input {
+    font-size: 14px;
+  }
+
+  .danmaku-send-button {
+    font-size: 14px;
+  }
+
   .camera-panel {
     margin-top: 72px;
   }
@@ -740,8 +752,28 @@ body {
 
   .player-controls {
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
     padding: 12px 0;
+  }
+
+  .icon-button {
+    width: 42px;
+    height: 42px;
+  }
+
+  .control-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .danmaku-control-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .time-text {
+    width: 96px;
+    font-size: 14px;
   }
 
   .progress-bar {
