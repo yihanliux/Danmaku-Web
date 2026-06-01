@@ -65,7 +65,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 40px 48px;
+  padding: 40px 24px;
 }
 
 /* 左侧播放器和右侧摄像头预览组成一个工作区。 */
@@ -821,7 +821,7 @@ body {
 }
 
 .workspace {
-  grid-template-columns: 1200px 240px;
+  grid-template-columns: 1200px 440px;
   width: max-content;
   max-width: none;
 }
@@ -868,6 +868,6 @@ body {
 }
 
 .camera-panel {
-  width: 240px;
+  width: 440px;
   margin-top: 83px;
 }
