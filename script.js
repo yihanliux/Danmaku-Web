@@ -13,7 +13,10 @@ const volumePanel = document.getElementById("volumePanel");
 const volumeBar = document.getElementById("volumeBar");
 const volumePercent = document.getElementById("volumePercent");
 const cameraPreview = document.getElementById("cameraPreview");
+const handLandmarkCanvas = document.getElementById("handLandmarkCanvas");
 const cameraStatus = document.getElementById("cameraStatus");
+const gestureStatus = document.getElementById("gestureStatus");
+const gestureResult = document.getElementById("gestureResult");
 const danmakuLayer = document.getElementById("danmakuLayer");
 const danmakuToggleButton = document.getElementById("danmakuToggleButton");
 const danmakuToggleIcon = document.getElementById("danmakuToggleIcon");
@@ -33,7 +36,8 @@ const danmakuInput = document.getElementById("danmakuInput");
 const danmakuSendButton = document.getElementById("danmakuSendButton");
 
 const DANMAKU_API_URL = getDanmakuApiUrl();
-const experimentSessionId = createDanmakuId();
+const GESTURE_API_URL = getGestureApiUrl();
+const GESTURE_TRIGGER_COOLDOWN = 2000;
 
 let currentVideoUrl = null;
 let selectedVideoFileName = "";
@@ -42,6 +46,10 @@ let danmakuRecords = [];
 let shownDanmakuIds = new Set();
 let lastDanmakuCheckTime = 0;
 let danmakuTracks = [];
+let pendingUserDanmaku = [];
+let gestureTimer = null;
+let isGestureRequestRunning = false;
+let lastGestureTriggerTime = 0;
 
 /*
   更新视频标题文字。
@@ -72,6 +80,7 @@ function clearVideo() {
   placeholder.classList.remove("hidden");
   selectedVideoFileName = "";
   clearDanmakuPlaybackState();
+  stopGestureRecognition();
   resetControls();
 }
 
@@ -423,22 +432,27 @@ function sendDanmaku() {
     return;
   }
 
+  sendParticipantDanmakuText(text);
+  danmakuInput.value = "";
+  updateDanmakuSendButton();
+}
+
+function sendParticipantDanmakuText(text) {
+  if (!selectedVideoFileName || !text) {
+    return;
+  }
+
   const record = {
-    id: createDanmakuId(),
     text,
     time: Number(videoPlayer.currentTime.toFixed(2)) || 0,
-    style: "default",
-    createdAt: new Date().toISOString(),
   };
 
   saveParticipantDanmaku(record);
 
   if (isDanmakuEnabled) {
-    createDanmakuItem(text);
+    pendingUserDanmaku.push(record);
+    showPendingUserDanmaku();
   }
-
-  danmakuInput.value = "";
-  updateDanmakuSendButton();
 }
 
 /*
@@ -446,10 +460,14 @@ function sendDanmaku() {
   每条弹幕都是一个动态创建的 div。
   它会被放进 danmakuLayer，所以只会出现在视频区域内部。
 */
-function createDanmakuItem(text) {
+function createDanmakuItem(record, options = {}) {
   const item = document.createElement("div");
   item.className = "danmaku-item";
-  item.textContent = text;
+  item.textContent = record.text;
+
+  if (options.isUser) {
+    item.classList.add("danmaku-item-user");
+  }
 
   danmakuLayer.appendChild(item);
 
@@ -468,7 +486,8 @@ function createDanmakuItem(text) {
     return false;
   }
 
-  const top = trackIndex * (itemHeight + getDanmakuCssNumber("--danmaku-track-gap", 8));
+  const top = getDanmakuCssNumber("--danmaku-top-offset", 0)
+    + trackIndex * (itemHeight + getDanmakuCssNumber("--danmaku-track-gap", 8));
   item.style.top = `${top}px`;
   danmakuTracks[trackIndex] = { element: item };
 
@@ -478,9 +497,26 @@ function createDanmakuItem(text) {
     }
 
     item.remove();
+    showPendingUserDanmaku();
   });
 
   return true;
+}
+
+function showPendingUserDanmaku() {
+  if (!isDanmakuEnabled || videoPlayer.paused) {
+    return;
+  }
+
+  while (pendingUserDanmaku.length > 0) {
+    const didShow = createDanmakuItem(pendingUserDanmaku[0], { isUser: true });
+
+    if (!didShow) {
+      return;
+    }
+
+    pendingUserDanmaku.shift();
+  }
 }
 
 /*
@@ -518,8 +554,6 @@ async function saveParticipantDanmaku(record) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        version: 1,
-        sessionId: experimentSessionId,
         videoName: selectedVideoFileName,
         item: record,
       }),
@@ -551,6 +585,14 @@ function getDanmakuApiUrl() {
   }
 
   return "http://localhost:8000/api/danmaku";
+}
+
+function getGestureApiUrl() {
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    return "/api/gesture";
+  }
+
+  return "http://localhost:8000/api/gesture";
 }
 
 /*
@@ -633,13 +675,15 @@ function showScheduledDanmaku() {
     clearDanmakuTracks();
   }
 
+  showPendingUserDanmaku();
+
   danmakuRecords.forEach((record) => {
     if (shownDanmakuIds.has(record.id)) {
       return;
     }
 
     if (record.time > lastDanmakuCheckTime && record.time <= currentTime) {
-      createDanmakuItem(record.text);
+      createDanmakuItem(record);
       shownDanmakuIds.add(record.id);
     }
   });
@@ -663,6 +707,7 @@ function clearDanmakuPlaybackState() {
   shownDanmakuIds.clear();
   danmakuLayer.replaceChildren();
   clearDanmakuTracks();
+  pendingUserDanmaku = [];
   lastDanmakuCheckTime = 0;
 }
 
@@ -702,6 +747,7 @@ function updateDanmakuControls() {
     danmakuLayer.classList.add("hidden");
     danmakuLayer.replaceChildren();
     clearDanmakuTracks();
+    pendingUserDanmaku = [];
     shownDanmakuIds.clear();
   }
 
@@ -736,10 +782,172 @@ async function startCameraPreview() {
     cameraPreview.srcObject = stream;
     await cameraPreview.play();
     cameraStatus.classList.add("hidden");
+    updateGestureRecognitionState();
   } catch (error) {
     console.error("Camera error:", error);
     cameraStatus.textContent = getCameraErrorMessage(error);
   }
+}
+
+function startGestureRecognition() {
+  if (gestureTimer) {
+    return;
+  }
+
+  gestureStatus.classList.remove("hidden");
+  gestureTimer = window.setInterval(detectGestureFromCamera, 600);
+}
+
+function stopGestureRecognition() {
+  if (gestureTimer) {
+    window.clearInterval(gestureTimer);
+    gestureTimer = null;
+  }
+
+  gestureStatus.classList.add("hidden");
+  gestureResult.classList.add("hidden");
+  clearHandLandmarks();
+}
+
+function shouldRecognizeGestures() {
+  return Boolean(selectedVideoFileName)
+    && !videoPlayer.paused
+    && !videoPlayer.ended
+    && cameraPreview.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
+}
+
+function updateGestureRecognitionState() {
+  if (shouldRecognizeGestures()) {
+    startGestureRecognition();
+    return;
+  }
+
+  stopGestureRecognition();
+}
+
+async function detectGestureFromCamera() {
+  if (isGestureRequestRunning || !shouldRecognizeGestures()) {
+    updateGestureRecognitionState();
+    return;
+  }
+
+  isGestureRequestRunning = true;
+
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = 320;
+    canvas.height = 180;
+
+    const context = canvas.getContext("2d");
+    context.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
+
+    const response = await fetch(GESTURE_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        image: canvas.toDataURL("image/jpeg", 0.7),
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!shouldRecognizeGestures()) {
+      stopGestureRecognition();
+      return;
+    }
+
+    updateGestureResult(result);
+    drawHandLandmarks(result.landmarks || [], result.connections || []);
+    sendGestureDanmaku(result);
+  } catch (error) {
+    console.warn("Gesture recognition failed:", error);
+    gestureResult.classList.add("hidden");
+    clearHandLandmarks();
+  } finally {
+    isGestureRequestRunning = false;
+  }
+}
+
+function sendGestureDanmaku(result) {
+  if (!shouldRecognizeGestures()) {
+    return;
+  }
+
+  if (!result.ok || !result.success || !result.gesture) {
+    return;
+  }
+
+  const text = result.danmakuText;
+
+  if (!text) {
+    return;
+  }
+
+  const now = Date.now();
+
+  if (now - lastGestureTriggerTime < GESTURE_TRIGGER_COOLDOWN) {
+    return;
+  }
+
+  lastGestureTriggerTime = now;
+  sendParticipantDanmakuText(text);
+}
+
+function updateGestureResult(result) {
+  if (result.ok && result.success) {
+    gestureResult.textContent = result.message || `成功发送弹幕：${result.danmakuText}`;
+    gestureResult.classList.remove("hidden");
+    return;
+  }
+
+  gestureResult.classList.add("hidden");
+}
+
+function drawHandLandmarks(landmarks, connections) {
+  const rect = handLandmarkCanvas.getBoundingClientRect();
+  const pixelRatio = window.devicePixelRatio || 1;
+
+  handLandmarkCanvas.width = Math.round(rect.width * pixelRatio);
+  handLandmarkCanvas.height = Math.round(rect.height * pixelRatio);
+
+  const context = handLandmarkCanvas.getContext("2d");
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  context.clearRect(0, 0, rect.width, rect.height);
+
+  if (!landmarks.length) {
+    return;
+  }
+
+  context.lineWidth = 2;
+  context.strokeStyle = "#1E96FC";
+  context.fillStyle = "#ffffff";
+
+  connections.forEach(([startIndex, endIndex]) => {
+    const start = landmarks[startIndex];
+    const end = landmarks[endIndex];
+
+    if (!start || !end) {
+      return;
+    }
+
+    context.beginPath();
+    context.moveTo(start.x * rect.width, start.y * rect.height);
+    context.lineTo(end.x * rect.width, end.y * rect.height);
+    context.stroke();
+  });
+
+  landmarks.forEach((landmark) => {
+    context.beginPath();
+    context.arc(landmark.x * rect.width, landmark.y * rect.height, 3.5, 0, Math.PI * 2);
+    context.fill();
+  });
+}
+
+function clearHandLandmarks() {
+  const context = handLandmarkCanvas.getContext("2d");
+  context.clearRect(0, 0, handLandmarkCanvas.width, handLandmarkCanvas.height);
 }
 
 /*
@@ -821,8 +1029,12 @@ videoPlayer.addEventListener("pause", updatePlayButton);
 videoPlayer.addEventListener("ended", updatePlayButton);
 videoPlayer.addEventListener("seeked", resetDanmakuSchedule);
 videoPlayer.addEventListener("play", updateDanmakuAnimationState);
+videoPlayer.addEventListener("play", showPendingUserDanmaku);
 videoPlayer.addEventListener("pause", updateDanmakuAnimationState);
 videoPlayer.addEventListener("ended", updateDanmakuAnimationState);
+videoPlayer.addEventListener("play", updateGestureRecognitionState);
+videoPlayer.addEventListener("pause", updateGestureRecognitionState);
+videoPlayer.addEventListener("ended", updateGestureRecognitionState);
 
 // 点击弹幕开关按钮时，切换是否显示弹幕。
 
