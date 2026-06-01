@@ -821,7 +821,7 @@ body {
 }
 
 .workspace {
-  grid-template-columns: 1200px 720px;
+  grid-template-columns: 1200px 240px;
   width: max-content;
   max-width: none;
 }
@@ -868,6 +868,6 @@ body {
 }
 
 .camera-panel {
-  width: 720px;
+  width: 240px;
   margin-top: 83px;
 }
