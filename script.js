@@ -41,14 +41,7 @@ let isDanmakuEnabled = true;
 let danmakuRecords = [];
 let shownDanmakuIds = new Set();
 let lastDanmakuCheckTime = 0;
-let danmakuDisplayAreaPercent = 25;
-let danmakuOpacity = 0.8;
-let danmakuFontSize = 30;
-let danmakuAnimationDuration = 15;
 let danmakuTracks = [];
-
-const DANMAKU_TRACK_GAP = 8;
-const DANMAKU_ENTRY_GAP = 24;
 
 /*
   更新视频标题文字。
@@ -304,14 +297,9 @@ function mapRange(value, inputMin, inputMax, outputMin, outputMax) {
   return outputMin + ratio * (outputMax - outputMin);
 }
 
-function clampNumber(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function getResponsiveDanmakuFontSize() {
-  const layerWidth = danmakuLayer.clientWidth || window.innerWidth;
-  const scale = clampNumber(layerWidth / 960, 0.58, 1);
-  return Math.round(danmakuFontSize * scale);
+function getDanmakuCssNumber(name, fallback) {
+  const value = Number.parseFloat(getComputedStyle(danmakuLayer).getPropertyValue(name));
+  return Number.isFinite(value) ? value : fallback;
 }
 
 function updateSettingBarDisplay(bar, valueElement) {
@@ -320,21 +308,61 @@ function updateSettingBarDisplay(bar, valueElement) {
   bar.style.setProperty("--setting-percent", `${percent}%`);
 }
 
-function updateDanmakuSettings() {
-  danmakuDisplayAreaPercent = Number(danmakuAreaBar.value);
-  danmakuOpacity = Number(danmakuOpacityBar.value) / 100;
-  danmakuFontSize = mapRange(Number(danmakuFontSizeBar.value), 0, 100, 18, 42);
-  danmakuAnimationDuration = mapRange(Number(danmakuSpeedBar.value), 0, 100, 24, 6);
+function getPercentFromRange(value, outputMin, outputMax) {
+  if (outputMax === outputMin) {
+    return 0;
+  }
+
+  return ((value - outputMin) / (outputMax - outputMin)) * 100;
+}
+
+function initializeDanmakuSettingsFromCss() {
+  const opacity = getDanmakuCssNumber("--danmaku-opacity", 0.8);
+  const displayArea = getDanmakuCssNumber("--danmaku-display-area", 25);
+  const fontSize = getDanmakuCssNumber("--danmaku-font-size", 16);
+  const fontSizeMin = getDanmakuCssNumber("--danmaku-font-size-min", 10);
+  const fontSizeMax = getDanmakuCssNumber("--danmaku-font-size-max", 22);
+  const speed = getDanmakuCssNumber("--danmaku-speed", 90);
+  const speedMin = getDanmakuCssNumber("--danmaku-speed-min", 60);
+  const speedMax = getDanmakuCssNumber("--danmaku-speed-max", 140);
+
+  danmakuAreaBar.value = String(displayArea);
+  danmakuOpacityBar.value = String(opacity * 100);
+  danmakuFontSizeBar.value = String(getPercentFromRange(fontSize, fontSizeMin, fontSizeMax));
+  danmakuSpeedBar.value = String(getPercentFromRange(speed, speedMin, speedMax));
 
   updateSettingBarDisplay(danmakuAreaBar, danmakuAreaValue);
   updateSettingBarDisplay(danmakuOpacityBar, danmakuOpacityValue);
   updateSettingBarDisplay(danmakuFontSizeBar, danmakuFontSizeValue);
   updateSettingBarDisplay(danmakuSpeedBar, danmakuSpeedValue);
+}
 
-  document.querySelectorAll(".danmaku-item").forEach((item) => {
-    item.style.opacity = String(danmakuOpacity);
-    item.style.fontSize = `${getResponsiveDanmakuFontSize()}px`;
-  });
+function updateDanmakuSettings() {
+  const fontSize = mapRange(
+    Number(danmakuFontSizeBar.value),
+    0,
+    100,
+    getDanmakuCssNumber("--danmaku-font-size-min", 10),
+    getDanmakuCssNumber("--danmaku-font-size-max", 22)
+  );
+
+  const speed = mapRange(
+    Number(danmakuSpeedBar.value),
+    0,
+    100,
+    getDanmakuCssNumber("--danmaku-speed-min", 60),
+    getDanmakuCssNumber("--danmaku-speed-max", 140)
+  );
+
+  danmakuLayer.style.setProperty("--danmaku-display-area", danmakuAreaBar.value);
+  danmakuLayer.style.setProperty("--danmaku-opacity", String(Number(danmakuOpacityBar.value) / 100));
+  danmakuLayer.style.setProperty("--danmaku-font-size", `${fontSize}px`);
+  danmakuLayer.style.setProperty("--danmaku-speed", String(speed));
+
+  updateSettingBarDisplay(danmakuAreaBar, danmakuAreaValue);
+  updateSettingBarDisplay(danmakuOpacityBar, danmakuOpacityValue);
+  updateSettingBarDisplay(danmakuFontSizeBar, danmakuFontSizeValue);
+  updateSettingBarDisplay(danmakuSpeedBar, danmakuSpeedValue);
 }
 
 function updateDanmakuSendButton() {
@@ -347,9 +375,11 @@ function clearDanmakuTracks() {
 
 function getDanmakuTrackCount(itemHeight) {
   const layerHeight = danmakuLayer.clientHeight;
-  const visibleHeight = layerHeight * (danmakuDisplayAreaPercent / 100);
-  const trackHeight = itemHeight + DANMAKU_TRACK_GAP;
-  return Math.max(1, Math.floor((visibleHeight + DANMAKU_TRACK_GAP) / trackHeight));
+  const trackGap = getDanmakuCssNumber("--danmaku-track-gap", 8);
+  const displayArea = getDanmakuCssNumber("--danmaku-display-area", 25);
+  const visibleHeight = layerHeight * (displayArea / 100);
+  const trackHeight = itemHeight + trackGap;
+  return Math.max(1, Math.floor((visibleHeight + trackGap) / trackHeight));
 }
 
 function isDanmakuTrackFree(trackIndex) {
@@ -361,29 +391,7 @@ function isDanmakuTrackFree(trackIndex) {
 
   const layerRect = danmakuLayer.getBoundingClientRect();
   const itemRect = track.element.getBoundingClientRect();
-  return itemRect.right <= layerRect.right - DANMAKU_ENTRY_GAP;
-}
-
-function getFallbackTrackIndex(trackCount) {
-  let fallbackIndex = 0;
-  let smallestRight = Infinity;
-
-  for (let index = 0; index < trackCount; index += 1) {
-    const track = danmakuTracks[index];
-
-    if (!track || !track.element.isConnected) {
-      return index;
-    }
-
-    const right = track.element.getBoundingClientRect().right;
-
-    if (right < smallestRight) {
-      smallestRight = right;
-      fallbackIndex = index;
-    }
-  }
-
-  return fallbackIndex;
+  return itemRect.right <= layerRect.right - getDanmakuCssNumber("--danmaku-entry-gap", 24);
 }
 
 function chooseDanmakuTrack(itemHeight) {
@@ -395,7 +403,7 @@ function chooseDanmakuTrack(itemHeight) {
     }
   }
 
-  return getFallbackTrackIndex(trackCount);
+  return -1;
 }
 
 /*
@@ -442,15 +450,25 @@ function createDanmakuItem(text) {
   const item = document.createElement("div");
   item.className = "danmaku-item";
   item.textContent = text;
-  item.style.opacity = String(danmakuOpacity);
-  item.style.fontSize = `${getResponsiveDanmakuFontSize()}px`;
-  item.style.animationDuration = `${danmakuAnimationDuration}s`;
 
   danmakuLayer.appendChild(item);
 
   const itemHeight = item.offsetHeight || 26;
+  const itemWidth = item.offsetWidth || 0;
+  const layerWidth = danmakuLayer.clientWidth;
+  const travelDistance = layerWidth + itemWidth;
+  const speed = getDanmakuCssNumber("--danmaku-speed", 90);
+  item.style.setProperty("--danmaku-exit-distance", `${layerWidth}px`);
+  item.style.setProperty("--danmaku-duration", `${travelDistance / speed}s`);
+
   const trackIndex = chooseDanmakuTrack(itemHeight);
-  const top = trackIndex * (itemHeight + DANMAKU_TRACK_GAP);
+
+  if (trackIndex === -1) {
+    item.remove();
+    return false;
+  }
+
+  const top = trackIndex * (itemHeight + getDanmakuCssNumber("--danmaku-track-gap", 8));
   item.style.top = `${top}px`;
   danmakuTracks[trackIndex] = { element: item };
 
@@ -461,6 +479,8 @@ function createDanmakuItem(text) {
 
     item.remove();
   });
+
+  return true;
 }
 
 /*
@@ -829,7 +849,7 @@ videoPlayer.addEventListener("error", () => {
 // 页面刚打开时没有视频，所以先把控制栏设置为不可用状态。
 resetControls();
 updateDanmakuControls();
-updateDanmakuSettings();
+initializeDanmakuSettingsFromCss();
 updateDanmakuAnimationState();
 
 // 页面刚打开时没有视频，所以先把控制栏设置为不可用状态。

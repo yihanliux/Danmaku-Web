@@ -81,7 +81,7 @@ body {
 /* 播放器外壳改回固定尺寸，比最初版本更大。 */
 .player {
   width: 100%;
-  max-width: 1440px;
+  max-width: 1200px;
   display: flex;
   flex-direction: column;
   overflow: visible;
@@ -173,6 +173,16 @@ body {
   pointer-events: none 确保弹幕层不会挡住鼠标点击视频或控制栏。
 */
 .danmaku-layer {
+  --danmaku-display-area: 25;
+  --danmaku-opacity: 0.8;
+  --danmaku-font-size: 27px;
+  --danmaku-font-size-min: 14;
+  --danmaku-font-size-max: 40;
+  --danmaku-speed: 150;
+  --danmaku-speed-min: 100;
+  --danmaku-speed-max: 300;
+  --danmaku-track-gap: 8;
+  --danmaku-entry-gap: 24;
   position: absolute;
   inset: 0;
   z-index: 2;
@@ -189,15 +199,16 @@ body {
   right: 0;
   max-width: none;
   color: #ffffff;
-  font-size: 30px;
+  font-size: var(--danmaku-font-size);
   font-weight: 500;
   line-height: 1.2;
-  opacity: 0.8;
+  opacity: var(--danmaku-opacity);
   overflow: visible;
   overflow-wrap: normal;
   white-space: nowrap;
   word-break: keep-all;
   animation-name: danmaku-move;
+  animation-duration: var(--danmaku-duration, 18s);
   animation-timing-function: linear;
   animation-fill-mode: forwards;
 }
@@ -213,7 +224,7 @@ body {
   }
 
   to {
-    transform: translateX(calc(-100vw - 100%));
+    transform: translateX(calc(-1 * var(--danmaku-exit-distance, 1200px)));
   }
 }
 
@@ -799,4 +810,64 @@ body {
     width: 100%;
     margin-top: 0;
   }
+}
+
+/*
+  实验用固定布局。
+  video 和 camera 不再根据屏幕宽度缩放；如果显示器宽度不够，页面横向滚动。
+*/
+.app {
+  overflow-x: auto;
+}
+
+.workspace {
+  grid-template-columns: 1200px 720px;
+  width: max-content;
+  max-width: none;
+}
+
+.player {
+  width: 1200px;
+  max-width: 1200px;
+  min-height: 0;
+}
+
+.screen {
+  width: 1200px;
+  min-height: 0;
+}
+
+.player-controls {
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+.icon-button {
+  width: 50px;
+  height: 50px;
+}
+
+.control-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.danmaku-control-icon {
+  width: 35px;
+  height: 35px;
+}
+
+.time-text {
+  width: 112px;
+  font-size: 16px;
+}
+
+.danmaku-form {
+  order: 0;
+  width: 330px;
+}
+
+.camera-panel {
+  width: 720px;
+  margin-top: 83px;
 }
