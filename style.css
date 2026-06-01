@@ -871,3 +871,35 @@ body {
   width: 440px;
   margin-top: 83px;
 }
+
+.player:fullscreen {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  border: 0;
+  border-radius: 0;
+  background: #000000;
+}
+
+.player:fullscreen .player-topbar {
+  display: none;
+}
+
+.player:fullscreen .screen {
+  width: 100vw;
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.player:fullscreen .video-area,
+.player:fullscreen #videoPlayer {
+  width: 100%;
+  height: 100%;
+}
+
+.player:fullscreen .player-controls {
+  flex: 0 0 auto;
+  padding: 12px 0;
+  background: #ffffff;
+}
