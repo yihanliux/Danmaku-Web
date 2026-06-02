@@ -6,6 +6,8 @@ GESTURE_DANMAKU_TEXT = {
     "Raising Both Fists": "Raising Both Fists",
     "Pressing Both Hands Downward": "Pressing Both Hands Downward",
     "Opening Both Palms Upward": "Opening Both Palms Upward",
+    "Pressing Palms Together": "Pressing Palms Together",
+    "Clasping Hands": "Clasping Hands",
 }
 
 

@@ -14,6 +14,7 @@ class DanmakuStorage:
         """把一条参与者弹幕追加保存到对应视频的 jsonl 文件中。"""
         video_name = data.get("videoName") or "unknown_video"
         item = data.get("item") or {}
+        time_seconds = item.get("time", 0)
 
         # 如果 experiment_data 文件夹不存在，就自动创建。
         self.data_dir.mkdir(exist_ok=True)
@@ -25,7 +26,9 @@ class DanmakuStorage:
         record = {
             "id": self._next_id(output_path),
             "text": item.get("text", ""),
-            "time": item.get("time", 0),
+            "sendMethod": normalize_send_method(item.get("sendMethod")),
+            "time": format_video_time(time_seconds),
+            "timeSeconds": time_seconds,
         }
 
         # JSONL 的意思是“一行一条 JSON 数据”，方便后续实验分析逐行读取。
@@ -52,3 +55,35 @@ def safe_file_stem(name):
     stem = stem.strip(" .")
 
     return stem or "unknown_video"
+
+
+def format_video_time(seconds):
+    """把秒数格式化成 MM:SS.xx 或 HH:MM:SS.xx，方便直接阅读。"""
+    try:
+        total_seconds = max(0, float(seconds))
+    except (TypeError, ValueError):
+        total_seconds = 0
+
+    whole_seconds = int(total_seconds)
+    centiseconds = int(round((total_seconds - whole_seconds) * 100))
+
+    if centiseconds == 100:
+        whole_seconds += 1
+        centiseconds = 0
+
+    hours = whole_seconds // 3600
+    minutes = (whole_seconds % 3600) // 60
+    remaining_seconds = whole_seconds % 60
+
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{remaining_seconds:02d}.{centiseconds:02d}"
+
+    return f"{minutes:02d}:{remaining_seconds:02d}.{centiseconds:02d}"
+
+
+def normalize_send_method(send_method):
+    """保存弹幕发送方式：手动输入 type，手势触发 gesture。"""
+    if send_method in {"type", "gesture"}:
+        return send_method
+
+    return "type"

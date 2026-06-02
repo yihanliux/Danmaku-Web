@@ -9,7 +9,6 @@ from mediapipe.tasks.python import vision
 from mediapipe.python._framework_bindings import resource_util
 
 from gesture_danmaku_map import get_danmaku_text
-from gesture_recognizers import GESTURE_RECOGNIZERS, get_three_point_debug
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +21,12 @@ BUILT_IN_GESTURE_MAP = {
 BUILT_IN_GESTURE_SCORE_THRESHOLD = 0.55
 TWO_HAND_GESTURE_SCORE_THRESHOLD = 0.5
 PALM_ORIENTATION_THRESHOLD = 0.03
+PALM_UP_DOWN_THRESHOLD = 0.25
+PALMS_TOGETHER_DISTANCE_THRESHOLD = 0.85
+PALMS_TOGETHER_DIRECTION_THRESHOLD = 0.55
+CLASPED_HANDS_CENTER_DISTANCE_THRESHOLD = 1.35
+CLASPED_HANDS_FINGER_DISTANCE_THRESHOLD = 0.75
+CLASPED_HANDS_MIN_FOLDED_FINGERS = 4
 FINGER_JOINTS = {
     "index": (8, 6),
     "middle": (12, 10),
@@ -29,8 +34,15 @@ FINGER_JOINTS = {
     "pinky": (20, 18),
 }
 OPEN_FINGERS = ("index", "middle", "ring", "pinky")
+THREE_POINT_EXTENDED_FINGERS = ("middle", "ring", "pinky")
+FINGER_TIPS = (8, 12, 16, 20)
+FINGER_PIPS = (6, 10, 14, 18)
 WRIST = 0
+THUMB_TIP = 4
 INDEX_MCP = 5
+INDEX_TIP = 8
+MIDDLE_MCP = 9
+MIDDLE_TIP = 12
 PINKY_MCP = 17
 
 
@@ -48,9 +60,9 @@ class HandGestureClassifier:
             base_options=base_options,
             running_mode=vision.RunningMode.IMAGE,
             num_hands=2,
-            min_hand_detection_confidence=0.35,
-            min_hand_presence_confidence=0.35,
-            min_tracking_confidence=0.35,
+            min_hand_detection_confidence=0.2,
+            min_hand_presence_confidence=0.2,
+            min_tracking_confidence=0.2,
         )
         self.recognizer = vision.GestureRecognizer.create_from_options(options)
 
@@ -147,13 +159,23 @@ class HandGestureClassifier:
         if all(hand["category"] == "Closed_Fist" and hand["score"] >= TWO_HAND_GESTURE_SCORE_THRESHOLD for hand in hands):
             return "Raising Both Fists"
 
+        clasped_hands = self._clasped_hands_debug(result.hand_landmarks)
+
+        if clasped_hands["matched"]:
+            return "Clasping Hands"
+
         if not all(hand["open"] for hand in hands):
             return None
 
-        if all(hand["palmOrientationScore"] >= PALM_ORIENTATION_THRESHOLD for hand in hands):
+        palms_together = self._palms_together_debug(result.hand_landmarks)
+
+        if palms_together["matched"]:
+            return "Pressing Palms Together"
+
+        if all(hand["palmUpDownScore"] <= -PALM_UP_DOWN_THRESHOLD for hand in hands):
             return "Pressing Both Hands Downward"
 
-        if all(hand["palmOrientationScore"] <= -PALM_ORIENTATION_THRESHOLD for hand in hands):
+        if all(hand["palmUpDownScore"] >= PALM_UP_DOWN_THRESHOLD for hand in hands):
             return "Opening Both Palms Upward"
 
         return None
@@ -172,9 +194,8 @@ class HandGestureClassifier:
     def _recognize_custom_gesture(self, hand_landmarks):
         """Return the first matched app-specific custom gesture."""
         for landmarks in hand_landmarks:
-            for gesture, recognizer in GESTURE_RECOGNIZERS.items():
-                if recognizer(landmarks):
-                    return gesture
+            if self._is_three_point_gesture(landmarks):
+                return "Three-Point Gesture"
 
         return None
 
@@ -187,7 +208,9 @@ class HandGestureClassifier:
             "image": image_debug or {},
             "builtIn": self._built_in_debug(result),
             "hands": self._hand_debug(result),
-            "threePoint": get_three_point_debug(landmarks) if landmarks else None,
+            "claspedHands": self._clasped_hands_debug(result.hand_landmarks),
+            "palmsTogether": self._palms_together_debug(result.hand_landmarks),
+            "threePoint": self._three_point_debug(landmarks) if landmarks else None,
         }
 
     def _built_in_debug(self, result):
@@ -229,6 +252,7 @@ class HandGestureClassifier:
                 "handednessScore": float(handedness.score) if handedness else None,
                 "open": self._is_open_hand(landmarks),
                 "palmOrientationScore": float(self._palm_orientation_score(landmarks, handedness)),
+                "palmUpDownScore": float(self._palm_up_down_score(landmarks, handedness)),
             })
 
         return hands
@@ -248,12 +272,148 @@ class HandGestureClassifier:
     def _is_open_hand(self, landmarks):
         return all(self._is_finger_extended(landmarks, finger) for finger in OPEN_FINGERS)
 
+    def _is_three_point_gesture(self, landmarks):
+        return self._three_point_debug(landmarks)["matched"]
+
+    def _clasped_hands_debug(self, hand_landmarks):
+        if len(hand_landmarks) < 2:
+            return {
+                "matched": False,
+                "reason": "needTwoHands",
+                "handCount": len(hand_landmarks),
+            }
+
+        first_hand = hand_landmarks[0]
+        second_hand = hand_landmarks[1]
+        first_scale = self._hand_scale(first_hand)
+        second_scale = self._hand_scale(second_hand)
+        average_scale = (first_scale + second_scale) / 2
+        center_distance = self._distance_2d(first_hand[MIDDLE_MCP], second_hand[MIDDLE_MCP]) / (average_scale or 1)
+        folded_finger_count = self._folded_finger_count(first_hand) + self._folded_finger_count(second_hand)
+        finger_proximity = self._finger_proximity_score(first_hand, second_hand, average_scale)
+        matched = (
+            center_distance <= CLASPED_HANDS_CENTER_DISTANCE_THRESHOLD
+            and finger_proximity <= CLASPED_HANDS_FINGER_DISTANCE_THRESHOLD
+            and folded_finger_count >= CLASPED_HANDS_MIN_FOLDED_FINGERS
+        )
+
+        return {
+            "matched": matched,
+            "centerDistance": center_distance,
+            "centerDistanceThreshold": CLASPED_HANDS_CENTER_DISTANCE_THRESHOLD,
+            "fingerProximity": finger_proximity,
+            "fingerProximityThreshold": CLASPED_HANDS_FINGER_DISTANCE_THRESHOLD,
+            "foldedFingerCount": folded_finger_count,
+            "minFoldedFingerCount": CLASPED_HANDS_MIN_FOLDED_FINGERS,
+        }
+
+    def _palms_together_debug(self, hand_landmarks):
+        if len(hand_landmarks) < 2:
+            return {
+                "matched": False,
+                "reason": "needTwoHands",
+                "handCount": len(hand_landmarks),
+            }
+
+        first_hand = hand_landmarks[0]
+        second_hand = hand_landmarks[1]
+        first_scale = self._hand_scale(first_hand)
+        second_scale = self._hand_scale(second_hand)
+        average_scale = (first_scale + second_scale) / 2
+        palm_distances = {
+            "wrist": self._distance_2d(first_hand[WRIST], second_hand[WRIST]) / (average_scale or 1),
+            "indexMcp": self._distance_2d(first_hand[INDEX_MCP], second_hand[INDEX_MCP]) / (average_scale or 1),
+            "middleMcp": self._distance_2d(first_hand[MIDDLE_MCP], second_hand[MIDDLE_MCP]) / (average_scale or 1),
+            "pinkyMcp": self._distance_2d(first_hand[PINKY_MCP], second_hand[PINKY_MCP]) / (average_scale or 1),
+        }
+        mcp_distances = [
+            palm_distances["indexMcp"],
+            palm_distances["middleMcp"],
+            palm_distances["pinkyMcp"],
+        ]
+        average_mcp_distance = sum(mcp_distances) / len(mcp_distances)
+        max_mcp_distance = max(mcp_distances)
+        first_finger_direction = self._finger_direction(first_hand)
+        second_finger_direction = self._finger_direction(second_hand)
+        direction_similarity = self._cosine_similarity(first_finger_direction, second_finger_direction)
+        matched = (
+            average_mcp_distance <= PALMS_TOGETHER_DISTANCE_THRESHOLD
+            and direction_similarity >= PALMS_TOGETHER_DIRECTION_THRESHOLD
+        )
+
+        return {
+            "matched": matched,
+            "palmDistances": palm_distances,
+            "averageMcpDistance": average_mcp_distance,
+            "maxMcpDistance": max_mcp_distance,
+            "distanceThreshold": PALMS_TOGETHER_DISTANCE_THRESHOLD,
+            "directionSimilarity": direction_similarity,
+            "directionThreshold": PALMS_TOGETHER_DIRECTION_THRESHOLD,
+        }
+
+    def _three_point_debug(self, landmarks):
+        ok_touch_distance = self._distance_2d(landmarks[THUMB_TIP], landmarks[INDEX_TIP])
+        hand_scale = self._distance_2d(landmarks[WRIST], landmarks[MIDDLE_MCP]) or 1
+        touch_threshold = hand_scale * 0.28
+        extended_fingers = {
+            finger: self._is_finger_visually_extended(landmarks, finger)
+            for finger in THREE_POINT_EXTENDED_FINGERS
+        }
+        thumb_index_touching = ok_touch_distance < touch_threshold
+        other_fingers_open = all(extended_fingers.values())
+
+        return {
+            "matched": thumb_index_touching and other_fingers_open,
+            "thumbIndexTouching": thumb_index_touching,
+            "otherFingersOpen": other_fingers_open,
+            "okTouchDistance": ok_touch_distance,
+            "handScale": hand_scale,
+            "touchThreshold": touch_threshold,
+            "fingerChecks": extended_fingers,
+            "landmarks": {
+                "thumbTip": self._point_debug(landmarks[THUMB_TIP]),
+                "indexTip": self._point_debug(landmarks[INDEX_TIP]),
+                "middleMcp": self._point_debug(landmarks[MIDDLE_MCP]),
+                "wrist": self._point_debug(landmarks[WRIST]),
+            },
+        }
+
     def _is_finger_extended(self, landmarks, finger):
         tip_index, pip_index = FINGER_JOINTS[finger]
         wrist = landmarks[WRIST]
         return self._distance(wrist, landmarks[tip_index]) > self._distance(wrist, landmarks[pip_index]) * 1.08
 
+    def _folded_finger_count(self, landmarks):
+        return sum(
+            not self._is_finger_extended(landmarks, finger)
+            for finger in OPEN_FINGERS
+        )
+
+    def _finger_proximity_score(self, first_hand, second_hand, hand_scale):
+        first_finger_points = [first_hand[index] for index in (*FINGER_TIPS, *FINGER_PIPS)]
+        second_finger_points = [second_hand[index] for index in (*FINGER_TIPS, *FINGER_PIPS)]
+        first_to_second = [
+            min(self._distance_2d(point, other_point) for other_point in second_finger_points)
+            for point in first_finger_points
+        ]
+        second_to_first = [
+            min(self._distance_2d(point, other_point) for other_point in first_finger_points)
+            for point in second_finger_points
+        ]
+        distances = first_to_second + second_to_first
+        return (sum(distances) / len(distances)) / (hand_scale or 1)
+
+    def _is_finger_visually_extended(self, landmarks, finger):
+        tip_index, pip_index = FINGER_JOINTS[finger]
+        return landmarks[tip_index].y < landmarks[pip_index].y
+
     def _palm_orientation_score(self, landmarks, handedness):
+        return self._palm_normal_component(landmarks, handedness, 2)
+
+    def _palm_up_down_score(self, landmarks, handedness):
+        return self._palm_normal_component(landmarks, handedness, 1)
+
+    def _palm_normal_component(self, landmarks, handedness, component_index):
         wrist = landmarks[WRIST]
         index_mcp = landmarks[INDEX_MCP]
         pinky_mcp = landmarks[PINKY_MCP]
@@ -273,16 +433,45 @@ class HandGestureClassifier:
         if normal_norm == 0:
             return 0
 
-        normalized_z = normal[2] / normal_norm
+        normalized_component = normal[component_index] / normal_norm
         handedness_name = handedness.category_name if handedness else ""
 
         if handedness_name == "Right":
-            return float(-normalized_z)
+            return float(-normalized_component)
 
-        return float(normalized_z)
+        return float(normalized_component)
+
+    def _hand_scale(self, landmarks):
+        palm_width = self._distance_2d(landmarks[INDEX_MCP], landmarks[PINKY_MCP])
+        palm_height = self._distance_2d(landmarks[WRIST], landmarks[MIDDLE_MCP])
+        return max(palm_width, palm_height, 0.001)
+
+    def _finger_direction(self, landmarks):
+        return np.array([
+            landmarks[MIDDLE_TIP].x - landmarks[WRIST].x,
+            landmarks[MIDDLE_TIP].y - landmarks[WRIST].y,
+        ])
+
+    def _cosine_similarity(self, first, second):
+        denominator = np.linalg.norm(first) * np.linalg.norm(second)
+
+        if denominator == 0:
+            return 0
+
+        return float(np.dot(first, second) / denominator)
 
     def _distance(self, first, second):
         return ((first.x - second.x) ** 2 + (first.y - second.y) ** 2 + (first.z - second.z) ** 2) ** 0.5
+
+    def _distance_2d(self, first, second):
+        return ((first.x - second.x) ** 2 + (first.y - second.y) ** 2) ** 0.5
+
+    def _point_debug(self, point):
+        return {
+            "x": point.x,
+            "y": point.y,
+            "z": point.z,
+        }
 
     def _result(self, success, gesture=None, landmarks=None, connections=None, debug=None):
         """Build the JSON response shared by all gesture recognition results."""

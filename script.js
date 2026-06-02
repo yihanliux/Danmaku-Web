@@ -433,12 +433,12 @@ function sendDanmaku() {
     return;
   }
 
-  sendParticipantDanmakuText(text);
+  sendParticipantDanmakuText(text, "type");
   danmakuInput.value = "";
   updateDanmakuSendButton();
 }
 
-function sendParticipantDanmakuText(text) {
+function sendParticipantDanmakuText(text, sendMethod = "type") {
   if (!selectedVideoFileName || !text) {
     return;
   }
@@ -446,6 +446,7 @@ function sendParticipantDanmakuText(text) {
   const record = {
     text,
     time: Number(videoPlayer.currentTime.toFixed(2)) || 0,
+    sendMethod,
   };
 
   saveParticipantDanmaku(record);
@@ -836,8 +837,8 @@ async function detectGestureFromCamera() {
 
   try {
     const canvas = document.createElement("canvas");
-    canvas.width = 640;
-    canvas.height = 360;
+    canvas.width = 960;
+    canvas.height = 540;
 
     const context = canvas.getContext("2d");
     context.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
@@ -895,7 +896,7 @@ function sendGestureDanmaku(result) {
   }
 
   lastGestureTriggerTime = now;
-  sendParticipantDanmakuText(text);
+  sendParticipantDanmakuText(text, "gesture");
 }
 
 function updateGestureResult(result) {
@@ -911,8 +912,10 @@ function updateGestureResult(result) {
 function updateGestureDebug(debug) {
   const threePoint = debug.threePoint;
   const builtIn = debug.builtIn;
+  const claspedHands = debug.claspedHands;
+  const palmsTogether = debug.palmsTogether;
 
-  if (!threePoint && !builtIn) {
+  if (!threePoint && !builtIn && !claspedHands && !palmsTogether) {
     gestureDebug.classList.add("hidden");
     gestureDebug.textContent = "";
     return;
@@ -933,9 +936,31 @@ function updateGestureDebug(debug) {
   if (Array.isArray(debug.hands) && debug.hands.length > 0) {
     debug.hands.forEach((hand) => {
       lines.push(
-        `h${hand.index}: ${hand.handedness || "?"} ${hand.category || "none"} ${formatDebugScore(hand.score)} open=${Boolean(hand.open)} palm=${formatDebugNumber(hand.palmOrientationScore)}`
+        `h${hand.index}: ${hand.handedness || "?"} ${hand.category || "none"} ${formatDebugScore(hand.score)} open=${Boolean(hand.open)} camera=${formatDebugNumber(hand.palmOrientationScore)} upDown=${formatDebugNumber(hand.palmUpDownScore)}`
       );
     });
+  }
+
+  if (claspedHands) {
+    lines.push(`clasping hands: ${claspedHands.matched}`);
+    if (claspedHands.reason) {
+      lines.push(`clasped reason: ${claspedHands.reason} (${claspedHands.handCount || 0} hand)`);
+    } else {
+      lines.push(`clasped center: ${formatDebugNumber(claspedHands.centerDistance)} <= ${formatDebugNumber(claspedHands.centerDistanceThreshold)}`);
+      lines.push(`clasped fingers: ${formatDebugNumber(claspedHands.fingerProximity)} <= ${formatDebugNumber(claspedHands.fingerProximityThreshold)}`);
+      lines.push(`folded: ${claspedHands.foldedFingerCount || 0} >= ${claspedHands.minFoldedFingerCount || 0}`);
+    }
+  }
+
+  if (palmsTogether) {
+    lines.push(`palms together: ${palmsTogether.matched}`);
+    if (palmsTogether.reason) {
+      lines.push(`palms reason: ${palmsTogether.reason} (${palmsTogether.handCount || 0} hand)`);
+    } else {
+      lines.push(`palms avgMcp: ${formatDebugNumber(palmsTogether.averageMcpDistance)} <= ${formatDebugNumber(palmsTogether.distanceThreshold)}`);
+      lines.push(`palms maxMcp: ${formatDebugNumber(palmsTogether.maxMcpDistance)}`);
+      lines.push(`direction: ${formatDebugNumber(palmsTogether.directionSimilarity)} >= ${formatDebugNumber(palmsTogether.directionThreshold)}`);
+    }
   }
 
   if (threePoint) {
