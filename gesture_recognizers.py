@@ -6,41 +6,46 @@ FINGER_JOINTS = {
     "pinky": (20, 18),
 }
 
-FOLDED_FINGERS = ("index", "middle", "ring", "pinky")
 OK_EXTENDED_FINGERS = ("middle", "ring", "pinky")
 THUMB_TIP = 4
-THUMB_IP = 3
-THUMB_MCP = 2
 INDEX_TIP = 8
 INDEX_PIP = 6
 WRIST = 0
-
-
-def is_raising_one_fist(landmarks):
-    """Detect a closed fist."""
-    fingers = _extended_fingers(landmarks)
-    return not any(fingers.values()) and not _is_thumb_open(landmarks)
-
-
-def is_thumbs_up(landmarks):
-    """Detect four folded fingers with the thumb extended upward."""
-    return _are_fingers_folded(landmarks, FOLDED_FINGERS) and _is_thumb_up(landmarks)
-
-
-def is_thumbs_down(landmarks):
-    """Detect four folded fingers with the thumb extended downward."""
-    return _are_fingers_folded(landmarks, FOLDED_FINGERS) and _is_thumb_down(landmarks)
-
+MIDDLE_MCP = 9
 
 def is_three_point_gesture(landmarks):
-    """Detect an OK gesture: thumb and index touch, other three fingers open."""
-    ok_touch_distance = _distance(landmarks[THUMB_TIP], landmarks[INDEX_TIP])
-    hand_scale = _distance(landmarks[WRIST], landmarks[INDEX_PIP]) or 1
+    debug = get_three_point_debug(landmarks)
+    return debug["matched"]
 
-    return (
-        ok_touch_distance < hand_scale * 0.28
-        and _are_fingers_extended(landmarks, OK_EXTENDED_FINGERS)
-    )
+
+def get_three_point_debug(landmarks):
+    ok_touch_distance = _distance(landmarks[THUMB_TIP], landmarks[INDEX_TIP])
+    hand_scale = _distance(landmarks[WRIST], landmarks[MIDDLE_MCP]) or 1
+    touch_threshold = hand_scale * 0.28
+    extended_fingers = _extended_fingers(landmarks)
+    finger_checks = {
+        finger: extended_fingers[finger]
+        for finger in OK_EXTENDED_FINGERS
+    }
+
+    thumb_index_touching = ok_touch_distance < touch_threshold
+    other_fingers_open = all(finger_checks.values())
+
+    return {
+        "matched": thumb_index_touching and other_fingers_open,
+        "thumbIndexTouching": thumb_index_touching,
+        "otherFingersOpen": other_fingers_open,
+        "okTouchDistance": ok_touch_distance,
+        "handScale": hand_scale,
+        "touchThreshold": touch_threshold,
+        "fingerChecks": finger_checks,
+        "landmarks": {
+            "thumbTip": _point_debug(landmarks[THUMB_TIP]),
+            "indexTip": _point_debug(landmarks[INDEX_TIP]),
+            "middleMcp": _point_debug(landmarks[MIDDLE_MCP]),
+            "wrist": _point_debug(landmarks[WRIST]),
+        },
+    }
 
 
 def _extended_fingers(landmarks):
@@ -55,38 +60,18 @@ def _are_fingers_extended(landmarks, fingers):
     return all(extended_fingers[finger] for finger in fingers)
 
 
-def _are_fingers_folded(landmarks, fingers):
-    extended_fingers = _extended_fingers(landmarks)
-    return all(not extended_fingers[finger] for finger in fingers)
-
-
-def _is_thumb_open(landmarks):
-    return _distance(landmarks[4], landmarks[9]) > _distance(landmarks[3], landmarks[9])
-
-
-def _is_thumb_up(landmarks):
-    return (
-        _is_thumb_open(landmarks)
-        and landmarks[THUMB_TIP].y < landmarks[THUMB_IP].y
-        and landmarks[THUMB_TIP].y < landmarks[THUMB_MCP].y
-    )
-
-
-def _is_thumb_down(landmarks):
-    return (
-        _is_thumb_open(landmarks)
-        and landmarks[THUMB_TIP].y > landmarks[THUMB_IP].y
-        and landmarks[THUMB_TIP].y > landmarks[THUMB_MCP].y
-    )
-
-
 def _distance(first, second):
     return ((first.x - second.x) ** 2 + (first.y - second.y) ** 2) ** 0.5
 
 
+def _point_debug(point):
+    return {
+        "x": point.x,
+        "y": point.y,
+        "z": point.z,
+    }
+
+
 GESTURE_RECOGNIZERS = {
-    "Raising One Fist": is_raising_one_fist,
-    "Thumbs-Up": is_thumbs_up,
-    "Thumbs-Down": is_thumbs_down,
     "Three-Point Gesture": is_three_point_gesture,
 }

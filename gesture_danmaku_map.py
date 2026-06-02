@@ -3,6 +3,9 @@ GESTURE_DANMAKU_TEXT = {
     "Thumbs-Up": "Thumbs-Up",
     "Thumbs-Down": "Thumbs-Down",
     "Three-Point Gesture": "Three-Point Gesture",
+    "Raising Both Fists": "Raising Both Fists",
+    "Pressing Both Hands Downward": "Pressing Both Hands Downward",
+    "Opening Both Palms Upward": "Opening Both Palms Upward",
 }
 
 

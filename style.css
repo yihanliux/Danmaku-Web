@@ -644,6 +644,12 @@ body {
   display: none;
 }
 
+.camera-column {
+  width: 100%;
+  max-width: 100%;
+  margin-top: 83px;
+}
+
 /*
   右侧摄像头预览区。
   宽度设置为 720px，比左侧主视频小，位置和左侧视频区域顶部对齐。
@@ -652,7 +658,6 @@ body {
   position: relative;
   width: 100%;
   max-width: 100%;
-  margin-top: 83px;
   overflow: hidden;
   border-radius: 8px;
   background: #111111;
@@ -723,6 +728,21 @@ body {
   font-weight: 600;
 }
 
+.gesture-debug {
+  width: 100%;
+  max-width: 100%;
+  min-height: 88px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 4px;
+  color: #ffffff;
+  background: #111111;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 1200px) {
   .app {
     padding: 28px 32px;
@@ -755,7 +775,7 @@ body {
     font-size: 14px;
   }
 
-  .camera-panel {
+  .camera-column {
     margin-top: 72px;
   }
 }
@@ -765,7 +785,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .camera-panel {
+  .camera-column {
     width: min(100%, 520px);
     margin-top: 0;
   }
@@ -849,7 +869,7 @@ body {
     margin-left: auto;
   }
 
-  .camera-panel {
+  .camera-column {
     width: 100%;
     margin-top: 0;
   }
@@ -910,9 +930,13 @@ body {
   width: 330px;
 }
 
-.camera-panel {
+.camera-column {
   width: 440px;
   margin-top: 83px;
+}
+
+.camera-panel {
+  width: 100%;
 }
 
 .player:fullscreen {

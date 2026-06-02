@@ -17,6 +17,7 @@ const handLandmarkCanvas = document.getElementById("handLandmarkCanvas");
 const cameraStatus = document.getElementById("cameraStatus");
 const gestureStatus = document.getElementById("gestureStatus");
 const gestureResult = document.getElementById("gestureResult");
+const gestureDebug = document.getElementById("gestureDebug");
 const danmakuLayer = document.getElementById("danmakuLayer");
 const danmakuToggleButton = document.getElementById("danmakuToggleButton");
 const danmakuToggleIcon = document.getElementById("danmakuToggleIcon");
@@ -835,8 +836,8 @@ async function detectGestureFromCamera() {
 
   try {
     const canvas = document.createElement("canvas");
-    canvas.width = 320;
-    canvas.height = 180;
+    canvas.width = 640;
+    canvas.height = 360;
 
     const context = canvas.getContext("2d");
     context.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
@@ -859,11 +860,13 @@ async function detectGestureFromCamera() {
     }
 
     updateGestureResult(result);
+    updateGestureDebug(result.debug || {});
     drawHandLandmarks(result.landmarks || [], result.connections || []);
     sendGestureDanmaku(result);
   } catch (error) {
     console.warn("Gesture recognition failed:", error);
     gestureResult.classList.add("hidden");
+    gestureDebug.classList.add("hidden");
     clearHandLandmarks();
   } finally {
     isGestureRequestRunning = false;
@@ -903,6 +906,64 @@ function updateGestureResult(result) {
   }
 
   gestureResult.classList.add("hidden");
+}
+
+function updateGestureDebug(debug) {
+  const threePoint = debug.threePoint;
+  const builtIn = debug.builtIn;
+
+  if (!threePoint && !builtIn) {
+    gestureDebug.classList.add("hidden");
+    gestureDebug.textContent = "";
+    return;
+  }
+
+  const lines = [];
+
+  lines.push(`hands: ${debug.handCount || 0} landmarks=${debug.handLandmarkCount || 0}`);
+
+  if (debug.image) {
+    lines.push(`image: ${debug.image.width || 0}x${debug.image.height || 0} mean=${formatDebugNumber(debug.image.meanBrightness)}`);
+  }
+
+  if (builtIn) {
+    lines.push(`task: ${builtIn.category || "none"} ${formatDebugScore(builtIn.score)}`);
+  }
+
+  if (Array.isArray(debug.hands) && debug.hands.length > 0) {
+    debug.hands.forEach((hand) => {
+      lines.push(
+        `h${hand.index}: ${hand.handedness || "?"} ${hand.category || "none"} ${formatDebugScore(hand.score)} open=${Boolean(hand.open)} palm=${formatDebugNumber(hand.palmOrientationScore)}`
+      );
+    });
+  }
+
+  if (threePoint) {
+    lines.push(`3pt matched: ${threePoint.matched}`);
+    lines.push(`touch: ${threePoint.thumbIndexTouching} (${formatDebugNumber(threePoint.okTouchDistance)} < ${formatDebugNumber(threePoint.touchThreshold)})`);
+    lines.push(`open: ${threePoint.otherFingersOpen}`);
+    lines.push(`middle/ring/pinky: ${formatFingerChecks(threePoint.fingerChecks)}`);
+    lines.push(`scale: ${formatDebugNumber(threePoint.handScale)}`);
+  } else {
+    lines.push("3pt: skipped - no hand landmarks");
+  }
+
+  gestureDebug.textContent = lines.join("\n");
+  gestureDebug.classList.remove("hidden");
+}
+
+function formatFingerChecks(fingerChecks = {}) {
+  return ["middle", "ring", "pinky"]
+    .map((finger) => `${finger}=${Boolean(fingerChecks[finger])}`)
+    .join(" ");
+}
+
+function formatDebugNumber(value) {
+  return Number.isFinite(value) ? value.toFixed(3) : "n/a";
+}
+
+function formatDebugScore(value) {
+  return Number.isFinite(value) ? `(${value.toFixed(2)})` : "";
 }
 
 function drawHandLandmarks(landmarks, connections) {

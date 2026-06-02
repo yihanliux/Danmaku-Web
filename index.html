@@ -197,13 +197,16 @@
         muted 可以避免浏览器因为自动播放策略阻止它播放。
         playsinline 主要是为了移动端浏览器不要强制全屏播放。
       -->
-      <aside class="camera-panel" aria-label="Camera preview">
-        <video id="cameraPreview" autoplay muted playsinline></video>
-        <canvas id="handLandmarkCanvas" class="hand-landmark-canvas" aria-hidden="true"></canvas>
-        <div id="cameraStatus" class="camera-status">Camera loading...</div>
-        <div id="gestureStatus" class="gesture-status hidden">正在识别手势</div>
-        <div id="gestureResult" class="gesture-result hidden">成功发送弹幕：厉害</div>
-      </aside>
+      <div class="camera-column">
+        <aside class="camera-panel" aria-label="Camera preview">
+          <video id="cameraPreview" autoplay muted playsinline></video>
+          <canvas id="handLandmarkCanvas" class="hand-landmark-canvas" aria-hidden="true"></canvas>
+          <div id="cameraStatus" class="camera-status">Camera loading...</div>
+          <div id="gestureStatus" class="gesture-status hidden">正在识别手势</div>
+          <div id="gestureResult" class="gesture-result hidden">成功发送弹幕：厉害</div>
+        </aside>
+        <pre id="gestureDebug" class="gesture-debug hidden" aria-label="Gesture debug output"></pre>
+      </div>
     </div>
   </main>
 
