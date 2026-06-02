@@ -1,5 +1,8 @@
 GESTURE_DANMAKU_TEXT = {
-    "open_palm": "厉害",
+    "Raising One Fist": "Raising One Fist",
+    "Thumbs-Up": "Thumbs-Up",
+    "Thumbs-Down": "Thumbs-Down",
+    "Three-Point Gesture": "Three-Point Gesture",
 }
 
 

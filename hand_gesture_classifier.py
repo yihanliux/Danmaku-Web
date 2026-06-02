@@ -1,8 +1,10 @@
 import base64
+import os
 
 import cv2
 import mediapipe as mp
 import numpy as np
+from mediapipe.python._framework_bindings import resource_util
 
 from gesture_danmaku_map import get_danmaku_text
 from gesture_recognizers import GESTURE_RECOGNIZERS
@@ -12,6 +14,7 @@ class HandGestureClassifier:
     """Use MediaPipe hand landmarks to classify simple hand gestures."""
 
     def __init__(self):
+        self._set_resource_dir()
         self.connections = sorted([
             [start, end]
             for start, end in mp.solutions.hands.HAND_CONNECTIONS
@@ -23,6 +26,13 @@ class HandGestureClassifier:
             min_detection_confidence=0.6,
             min_tracking_confidence=0.6,
         )
+
+    def _set_resource_dir(self):
+        """Use an ASCII MediaPipe resource path when Windows cannot load Chinese paths."""
+        resource_dir = os.environ.get("MEDIAPIPE_RESOURCE_DIR")
+
+        if resource_dir:
+            resource_util.set_resource_dir(resource_dir)
 
     def classify_frame(self, image_data):
         """Return the recognized gesture for one camera frame."""

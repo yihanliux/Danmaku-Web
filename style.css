@@ -131,7 +131,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #ffffff;
+  background: #f4f5f7;
 }
 
 /* 未选择有效视频前，本地播放器的 video 元素保持隐藏。 */
@@ -156,10 +156,10 @@ body {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  color: #ffffff;
+  color: #6b7280;
   font-size: 1rem;
   text-align: center;
-  background: #ffffff;
+  background: #f4f5f7;
 }
 
 .placeholder.hidden {

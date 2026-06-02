@@ -1036,18 +1036,8 @@ videoPlayer.addEventListener("play", updateGestureRecognitionState);
 videoPlayer.addEventListener("pause", updateGestureRecognitionState);
 videoPlayer.addEventListener("ended", updateGestureRecognitionState);
 
-// 点击弹幕开关按钮时，切换是否显示弹幕。
-
 // 点击 Send 按钮时，发送输入框里的弹幕。
 danmakuSendButton.addEventListener("click", sendDanmaku);
-
-// 在弹幕输入框里按 Enter 也可以发送弹幕。
-
-// 元数据加载完成后，启用控制栏并显示视频总时长。
-
-// 播放过程中持续同步进度条、当前时间和预置弹幕。
-
-// 播放开始时，把按钮图标切换成暂停图标。
 
 /*
   有些文件虽然是视频文件，但浏览器不一定支持它的编码。
@@ -1064,9 +1054,5 @@ updateDanmakuControls();
 initializeDanmakuSettingsFromCss();
 updateDanmakuAnimationState();
 
-// 页面刚打开时没有视频，所以先把控制栏设置为不可用状态。
-
 // 页面打开后立即尝试启动右侧摄像头预览。
 startCameraPreview();
-
-// 页面打开后立即尝试启动右侧摄像头预览。
