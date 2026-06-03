@@ -502,6 +502,15 @@ class GestureClassifier:
 
     def _covering_mouth_debug(self, pose_result, hand_landmarks=None):
         """判断 Covering Mouth：任意一只手腕靠近嘴部区域，或遮挡嘴部且手在脸部附近。"""
+        palms_together = self._palms_together_debug(hand_landmarks or [])
+
+        if palms_together["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByPalmsTogether",
+                "palmsTogether": palms_together,
+            }
+
         return self._face_region_cover_debug(
             pose_result,
             hand_landmarks,
