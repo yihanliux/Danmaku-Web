@@ -38,7 +38,6 @@ const danmakuSendButton = document.getElementById("danmakuSendButton");
 
 const DANMAKU_API_URL = getDanmakuApiUrl();
 const GESTURE_API_URL = getGestureApiUrl();
-const GESTURE_TRIGGER_COOLDOWN = 2000;
 
 let currentVideoUrl = null;
 let selectedVideoFileName = "";
@@ -50,7 +49,9 @@ let danmakuTracks = [];
 let pendingUserDanmaku = [];
 let gestureTimer = null;
 let isGestureRequestRunning = false;
-let lastGestureTriggerTime = 0;
+let currentHeldGesture = null;
+let currentHeldGestureStartedAt = 0;
+const lastGestureTriggerTimes = new Map();
 
 /*
   更新视频标题文字。
@@ -808,6 +809,7 @@ function stopGestureRecognition() {
 
   gestureStatus.classList.add("hidden");
   gestureResult.classList.add("hidden");
+  resetGestureHoldState();
   clearHandLandmarks();
 }
 
@@ -860,10 +862,10 @@ async function detectGestureFromCamera() {
       return;
     }
 
-    updateGestureResult(result);
     updateGestureDebug(result.debug || {});
     drawHandLandmarks(result.landmarks || [], result.connections || []);
-    sendGestureDanmaku(result);
+    const sendState = sendGestureDanmaku(result);
+    updateGestureResult(result, sendState);
   } catch (error) {
     console.warn("Gesture recognition failed:", error);
     gestureResult.classList.add("hidden");
@@ -876,37 +878,102 @@ async function detectGestureFromCamera() {
 
 function sendGestureDanmaku(result) {
   if (!shouldRecognizeGestures()) {
-    return;
+    resetGestureHoldState();
+    return { sent: false, reason: "notRecognizing" };
   }
 
   if (!result.ok || !result.success || !result.gesture) {
-    return;
+    resetGestureHoldState();
+    return { sent: false, reason: "noGesture" };
   }
 
   const text = result.danmakuText;
 
   if (!text) {
-    return;
+    resetGestureHoldState();
+    return { sent: false, reason: "noText" };
   }
 
+  const gesture = result.gesture;
+  const rule = result.sendRule || {};
   const now = Date.now();
+  const holdMilliseconds = secondsToMilliseconds(rule.holdSeconds);
+  const cooldownMilliseconds = secondsToMilliseconds(rule.cooldownSeconds);
 
-  if (now - lastGestureTriggerTime < GESTURE_TRIGGER_COOLDOWN) {
-    return;
+  if (currentHeldGesture !== gesture) {
+    currentHeldGesture = gesture;
+    currentHeldGestureStartedAt = now;
   }
 
-  lastGestureTriggerTime = now;
+  const heldMilliseconds = now - currentHeldGestureStartedAt;
+
+  if (heldMilliseconds < holdMilliseconds) {
+    return {
+      sent: false,
+      reason: "holding",
+      gesture,
+      heldMilliseconds,
+      holdMilliseconds,
+    };
+  }
+
+  const lastTriggerTime = lastGestureTriggerTimes.get(gesture) || 0;
+  const cooldownRemainingMilliseconds = cooldownMilliseconds - (now - lastTriggerTime);
+
+  if (cooldownRemainingMilliseconds > 0) {
+    return {
+      sent: false,
+      reason: "cooldown",
+      gesture,
+      cooldownRemainingMilliseconds,
+    };
+  }
+
+  lastGestureTriggerTimes.set(gesture, now);
   sendParticipantDanmakuText(text, "gesture");
+  return { sent: true, gesture };
 }
 
-function updateGestureResult(result) {
-  if (result.ok && result.success) {
-    gestureResult.textContent = result.message || `成功发送弹幕：${result.danmakuText}`;
+function resetGestureHoldState() {
+  currentHeldGesture = null;
+  currentHeldGestureStartedAt = 0;
+}
+
+function secondsToMilliseconds(seconds) {
+  const numericSeconds = Number(seconds);
+  return Number.isFinite(numericSeconds) && numericSeconds > 0 ? numericSeconds * 1000 : 0;
+}
+
+function updateGestureResult(result, sendState = {}) {
+  if (!result.ok || !result.success || !result.gesture) {
+    gestureResult.classList.add("hidden");
+    return;
+  }
+
+  if (sendState.sent) {
+    gestureResult.textContent = `Sent danmaku: ${result.danmakuText}`;
     gestureResult.classList.remove("hidden");
     return;
   }
 
-  gestureResult.classList.add("hidden");
+  if (sendState.reason === "holding") {
+    gestureResult.textContent = `Hold ${result.gesture}: ${formatSeconds(sendState.heldMilliseconds)} / ${formatSeconds(sendState.holdMilliseconds)}`;
+    gestureResult.classList.remove("hidden");
+    return;
+  }
+
+  if (sendState.reason === "cooldown") {
+    gestureResult.textContent = `${result.gesture} cooldown: ${formatSeconds(sendState.cooldownRemainingMilliseconds)}`;
+    gestureResult.classList.remove("hidden");
+    return;
+  }
+
+  gestureResult.textContent = `Detected: ${result.gesture}`;
+  gestureResult.classList.remove("hidden");
+}
+
+function formatSeconds(milliseconds) {
+  return `${(Math.max(0, milliseconds) / 1000).toFixed(1)}s`;
 }
 
 function updateGestureDebug(debug) {
@@ -914,8 +981,9 @@ function updateGestureDebug(debug) {
   const builtIn = debug.builtIn;
   const claspedHands = debug.claspedHands;
   const palmsTogether = debug.palmsTogether;
+  const pose = debug.pose;
 
-  if (!threePoint && !builtIn && !claspedHands && !palmsTogether) {
+  if (!threePoint && !builtIn && !claspedHands && !palmsTogether && !pose) {
     gestureDebug.classList.add("hidden");
     gestureDebug.textContent = "";
     return;
@@ -931,6 +999,65 @@ function updateGestureDebug(debug) {
 
   if (builtIn) {
     lines.push(`task: ${builtIn.category || "none"} ${formatDebugScore(builtIn.score)}`);
+  }
+
+  if (pose) {
+    lines.push(`pose: ${Boolean(pose.poseDetected)} count=${pose.poseCount || 0}`);
+
+    if (pose.coveringFace) {
+      lines.push(`covering face: ${Boolean(pose.coveringFace.matched)}`);
+      if (pose.coveringFace.reason) {
+        lines.push(`face reason: ${pose.coveringFace.reason}`);
+      } else {
+        lines.push(`face L/R: ${Boolean(pose.coveringFace.leftCovering)} / ${Boolean(pose.coveringFace.rightCovering)}`);
+        lines.push(`face dist L/R: ${formatDebugNumber(pose.coveringFace.left?.nearestDistance)} / ${formatDebugNumber(pose.coveringFace.right?.nearestDistance)}`);
+        lines.push(`face hand dist: ${formatDebugNumber(pose.coveringFace.handLandmark?.nearestDistance)} p=${pose.coveringFace.handLandmark?.pointIndex ?? "n/a"}`);
+        lines.push(`face very close L/R: ${Boolean(pose.coveringFace.left?.veryCloseRegion)} / ${Boolean(pose.coveringFace.right?.veryCloseRegion)}`);
+        lines.push(`face not above L/R: ${Boolean(pose.coveringFace.left?.notClearlyAboveTarget)} / ${Boolean(pose.coveringFace.right?.notClearlyAboveTarget)}`);
+        lines.push(`eye visibility min: ${formatDebugNumber(pose.coveringFace.regionVisibilityMin)}`);
+      }
+    }
+
+    if (pose.coveringMouth) {
+      lines.push(`covering mouth: ${Boolean(pose.coveringMouth.matched)}`);
+      if (pose.coveringMouth.reason) {
+        lines.push(`mouth reason: ${pose.coveringMouth.reason}`);
+      } else {
+        lines.push(`mouth L/R: ${Boolean(pose.coveringMouth.leftCovering)} / ${Boolean(pose.coveringMouth.rightCovering)}`);
+        lines.push(`mouth dist L/R: ${formatDebugNumber(pose.coveringMouth.left?.nearestDistance)} / ${formatDebugNumber(pose.coveringMouth.right?.nearestDistance)}`);
+        lines.push(`mouth hand dist: ${formatDebugNumber(pose.coveringMouth.handLandmark?.nearestDistance)} p=${pose.coveringMouth.handLandmark?.pointIndex ?? "n/a"}`);
+        lines.push(`mouth very close L/R: ${Boolean(pose.coveringMouth.left?.veryCloseRegion)} / ${Boolean(pose.coveringMouth.right?.veryCloseRegion)}`);
+        lines.push(`mouth not above L/R: ${Boolean(pose.coveringMouth.left?.notClearlyAboveTarget)} / ${Boolean(pose.coveringMouth.right?.notClearlyAboveTarget)}`);
+        lines.push(`mouth visibility min: ${formatDebugNumber(pose.coveringMouth.regionVisibilityMin)}`);
+      }
+    }
+
+    if (pose.handsOnHead) {
+      lines.push(`hands on head: ${Boolean(pose.handsOnHead.matched)}`);
+    }
+
+    if (pose.touchingHair) {
+      lines.push(`touching hair: ${Boolean(pose.touchingHair.matched)}`);
+      if (pose.touchingHair.reason) {
+        lines.push(`hair reason: ${pose.touchingHair.reason}`);
+      } else {
+        lines.push(`hair L/R: ${Boolean(pose.touchingHair.leftTouching)} / ${Boolean(pose.touchingHair.rightTouching)}`);
+        if (pose.touchingHair.headTouch) {
+          lines.push(`hair dist L/R: ${formatDebugNumber(pose.touchingHair.headTouch.left?.nearestDistance)} / ${formatDebugNumber(pose.touchingHair.headTouch.right?.nearestDistance)}`);
+        }
+      }
+    }
+
+    if (pose.headTilt) {
+      lines.push(`head tilt: ${Boolean(pose.headTilt.matched)}`);
+
+      if (pose.headTilt.reason) {
+        lines.push(`head reason: ${pose.headTilt.reason}`);
+      } else {
+        lines.push(`head angle: ${formatDebugNumber(pose.headTilt.absoluteAngle)} >= ${formatDebugNumber(pose.headTilt.angleThreshold)}`);
+        lines.push(`head relative: ${formatDebugNumber(pose.headTilt.relativeAngle)}`);
+      }
+    }
   }
 
   if (Array.isArray(debug.hands) && debug.hands.length > 0) {

@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 
 from danmaku_storage import DanmakuStorage
-from hand_gesture_classifier import HandGestureClassifier
+from gesture_classifier import GestureClassifier
 
 
 ROOT = Path(__file__).resolve().parent
@@ -12,7 +12,7 @@ HOST = "127.0.0.1"
 PORT = 8000
 
 storage = DanmakuStorage(DATA_DIR)
-gesture_classifier = HandGestureClassifier()
+gesture_classifier = GestureClassifier()
 
 
 class ExperimentHandler(SimpleHTTPRequestHandler):
