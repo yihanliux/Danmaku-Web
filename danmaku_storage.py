@@ -4,7 +4,13 @@ import re
 
 
 class DanmakuStorage:
-    """负责保存实验参与者发送的弹幕数据。"""
+    """负责保存实验参与者发送的弹幕数据。
+
+    保存规则：
+    - 每个视频对应一个独立 JSONL 文件；
+    - 文件名使用“视频文件名去掉扩展名 + _participant_danmaku.jsonl”；
+    - 每一行是一条参与者弹幕，便于后续用脚本逐行统计和分析。
+    """
 
     def __init__(self, data_dir):
         # data_dir 是实验数据文件夹，例如：experiment_data
@@ -31,7 +37,8 @@ class DanmakuStorage:
             "timeSeconds": time_seconds,
         }
 
-        # JSONL 的意思是“一行一条 JSON 数据”，方便后续实验分析逐行读取。
+        # JSONL 的意思是“一行一条 JSON 数据”。
+        # 追加写入不会破坏历史记录，也方便后续实验分析时逐行读取。
         with output_path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -47,7 +54,11 @@ class DanmakuStorage:
 
 
 def safe_file_stem(name):
-    """把视频文件名转换成可以安全保存到磁盘的文件名。"""
+    """把视频文件名转换成可以安全保存到磁盘的文件名。
+
+    Path(name).stem 会去掉最后一个扩展名。
+    Windows 文件名不允许的字符会统一替换成下划线，首尾空格和点号也会被清理。
+    """
     stem = Path(name).stem
 
     # Windows 文件名不能包含这些特殊字符，所以统一替换成下划线。
@@ -58,7 +69,10 @@ def safe_file_stem(name):
 
 
 def format_video_time(seconds):
-    """把秒数格式化成 MM:SS.xx 或 HH:MM:SS.xx，方便直接阅读。"""
+    """把秒数格式化成 MM:SS.xx 或 HH:MM:SS.xx，方便直接阅读。
+
+    timeSeconds 保留原始秒数用于计算；time 字段提供人工检查时更直观的时间字符串。
+    """
     try:
         total_seconds = max(0, float(seconds))
     except (TypeError, ValueError):
@@ -82,7 +96,10 @@ def format_video_time(seconds):
 
 
 def normalize_send_method(send_method):
-    """保存弹幕发送方式：手动输入 type，手势触发 gesture。"""
+    """规范化弹幕发送方式：手动输入 type，手势触发 gesture。
+
+    如果前端传来未知值，默认按手动输入处理，避免实验数据出现过多无效分类。
+    """
     if send_method in {"type", "gesture"}:
         return send_method
 

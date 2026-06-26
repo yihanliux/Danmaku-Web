@@ -4,15 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Local Player</title>
-  <link rel="stylesheet" href="style.css?v=20260601">
+  <link rel="stylesheet" href="style.css?v=20260626-typing-unavailable-send">
 </head>
 <body>
-  <!--
-    这个小按钮专门负责选择本地视频文件。
-    它被放在整个界面的左上角，并且样式比较低调，避免抢走视频标题和播放器的视觉焦点。
-    label 的 for="videoInput" 会连接到里面隐藏的 input。
-    用户点击这个 label 时，浏览器就会打开文件选择窗口。
-  -->
   <label class="select-button" for="videoInput">
     Select Video
     <input
@@ -22,70 +16,34 @@
     >
   </label>
 
-  <!--
-    页面主体区域。
-    左边是本地视频播放器，右边是摄像头实时预览画面。
-    这里用 main 标签表示这是页面的主要内容。
-  -->
+  <button id="conditionButton" class="condition-button" type="button" aria-label="Current condition: baseline">
+    Condition: Baseline
+  </button>
+
   <main class="app">
     <div class="workspace">
       <section class="player" aria-label="Local video player">
         <header class="player-topbar">
-          <!--
-            这里现在只显示视频名字，是普通文本，不再是按钮。
-            未选择视频时显示 Select Video。
-            选择视频后，JavaScript 会把这里的文字改成视频文件名。
-            它仍然放在之前那个位置，所以页面布局不会发生明显变化。
-          -->
           <div id="videoTitle" class="title-text">Please Select Video</div>
         </header>
 
-        <!--
-          视频画面区域。
-          video 标签是真正播放视频的地方。
-          preload="metadata" 表示浏览器先读取视频的基本信息，例如总时长。
-          controls 没有写在这里，因为我们下面已经自己做了固定显示的控制栏。
-        -->
         <div class="screen">
-          <!-- 新增：video-area 是视频和弹幕层共同的定位容器。 -->
           <div class="video-area">
             <video id="videoPlayer" preload="metadata">
               Your browser does not support the video tag.
             </video>
-            <!-- 新增：弹幕显示层，只负责显示飞过的视频评论，不放在控制栏里。 -->
             <div id="danmakuLayer" class="danmaku-layer" aria-hidden="true"></div>
             <div id="placeholder" class="placeholder">No video selected</div>
           </div>
         </div>
 
-        <!--
-          自定义控制栏固定放在视频下方。
-          这样播放按钮和进度条不会像浏览器原生 controls 那样自动隐藏。
-          disabled 表示没有选择视频之前，这些控件不能点击。
-          JavaScript 会在视频加载成功后把 disabled 去掉。
-        -->
         <div class="player-controls" aria-label="Video controls">
-          <!--
-            第 1 个控件：播放/暂停按钮。
-            按钮里面放的是图片，不再显示文字。
-            默认显示 play.png。
-            当视频开始播放后，JavaScript 会把图片换成 pause.png。
-          -->
           <button id="playButton" class="icon-button" type="button" disabled aria-label="Play">
             <img id="playIcon" class="control-icon" src="src/play.png" alt="">
           </button>
 
-          <!--
-            第 2 个控件：时间文本。
-            这里把“当前播放时间”和“视频总时长”放在同一个位置。
-            例如 02:23 / 05:50。
-          -->
           <span id="timeDisplay" class="time-text">00:00 / 00:00</span>
 
-          <!--
-            第 3 个控件：进度条。
-            样式先沿用原来的 range 进度条，只调整它在控制栏中的位置。
-          -->
           <input
             id="progressBar"
             class="progress-bar"
@@ -98,13 +56,6 @@
             aria-label="Video progress"
           >
 
-          <!--
-            第 4 组控件：弹幕开关、弹幕设置、弹幕样式和弹幕输入。
-            顺序是：
-            Danmaku open/close → Danmaku Settings1/2 → Danmaku Style + input。
-            弹幕开时显示 open、Settings1、Style。
-            弹幕关时显示 close、Settings2，并隐藏 Style。
-          -->
           <button id="danmakuToggleButton" class="icon-button" type="button" aria-label="Danmaku on">
             <img id="danmakuToggleIcon" class="danmaku-control-icon" src="src/Danmaku open.png" alt="">
           </button>
@@ -122,7 +73,7 @@
 
               <label class="danmaku-setting-row">
                 <span class="danmaku-setting-label">Opacity</span>
-                <span id="danmakuOpacityValue" class="danmaku-setting-value">80%</span>
+                <span id="danmakuOpacityValue" class="danmaku-setting-value">60%</span>
                 <input id="danmakuOpacityBar" class="danmaku-setting-bar" type="range" min="0" max="100" value="80">
               </label>
 
@@ -152,16 +103,14 @@
               autocomplete="off"
             >
             <button id="danmakuSendButton" class="danmaku-send-button" type="button">
-              Send
+              <span class="typing-send-default">Send</span>
+              <span class="typing-send-hover-content" aria-hidden="true">
+                <span>Send</span>
+                <img class="typing-send-icon" src="src/Send_Typing.png" alt="">
+              </span>
             </button>
           </div>
 
-          <!--
-            第 5 个控件：声音按钮。
-            点击 voice 图片后，才显示音量面板。
-            音量面板里有百分比文字和竖直音量条。
-            鼠标移出音量面板后，JavaScript 会把面板隐藏。
-          -->
           <div class="volume-wrapper">
             <button id="voiceButton" class="icon-button" type="button" aria-label="Volume">
               <img class="control-icon" src="src/voice.png" alt="">
@@ -181,22 +130,81 @@
             </div>
           </div>
 
-          <!--
-            第 6 个控件：全屏按钮。
-            点击后让播放器进入全屏模式。
-          -->
           <button id="fullscreenButton" class="icon-button" type="button" aria-label="Full screen">
             <img class="control-icon" src="src/full screen.png" alt="">
           </button>
         </div>
       </section>
 
-      <!--
-        右侧摄像头区域。
-        autoplay 表示拿到摄像头画面后自动播放。
-        muted 可以避免浏览器因为自动播放策略阻止它播放。
-        playsinline 主要是为了移动端浏览器不要强制全屏播放。
-      -->
+      <div class="shortcuts-column">
+        <aside class="shortcuts-panel" aria-label="On-device danmaku shortcuts">
+          <div class="shortcuts-header">
+            <h2 class="shortcuts-title">弹幕一键发送</h2>
+            <div class="shortcut-manage-wrapper">
+              <button id="shortcutManageButton" class="shortcut-manage-button" type="button" aria-label="管理快捷弹幕" aria-expanded="false">
+                <img id="shortcutManageIcon" class="shortcut-manage-icon" src="src/menu.png" alt="">
+              </button>
+              <div id="shortcutManageMenu" class="shortcut-manage-menu hidden" role="menu">
+                <button type="button" role="menuitem" data-shortcut-menu-action="delete">删除快捷弹幕</button>
+                <button type="button" role="menuitem" data-shortcut-menu-action="restore">恢复默认</button>
+              </div>
+            </div>
+          </div>
+          <div class="shortcuts-buttons" aria-label="Shortcut buttons">
+            <div class="shortcut-context-row shortcut-context-row-p" data-shortcut-group="P">
+              <span class="shortcut-context-label">得分：</span>
+              <button class="shortcut-button shortcut-button-p" type="button" data-shortcut-group="P" data-danmaku-text="精彩"><span class="shortcut-default-text">精彩</span><span class="shortcut-hover-content" aria-hidden="true"><span>精彩</span><img class="shortcut-send-icon" src="src/Send_P.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-p" type="button" data-shortcut-group="P" data-danmaku-text="牛逼"><span class="shortcut-default-text">牛逼</span><span class="shortcut-hover-content" aria-hidden="true"><span>牛逼</span><img class="shortcut-send-icon" src="src/Send_P.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-p" type="button" data-shortcut-group="P" data-danmaku-text="太棒了"><span class="shortcut-default-text">太棒了</span><span class="shortcut-hover-content" aria-hidden="true"><span>太棒了</span><img class="shortcut-send-icon" src="src/Send_P.png" alt=""></span></button>
+              <button class="shortcut-add-button shortcut-add-button-p" type="button" data-shortcut-group="P" aria-label="添加得分弹幕"><img class="shortcut-add-icon" src="src/add_P.png" alt=""></button>
+            </div>
+
+            <div class="shortcut-context-row shortcut-context-row-n" data-shortcut-group="N">
+              <span class="shortcut-context-label">失分：</span>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="可惜了"><span class="shortcut-default-text">可惜了</span><span class="shortcut-hover-content" aria-hidden="true"><span>可惜了</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="稳住稳住"><span class="shortcut-default-text">稳住稳住</span><span class="shortcut-hover-content" aria-hidden="true"><span>稳住稳住</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="问题不大"><span class="shortcut-default-text">问题不大</span><span class="shortcut-hover-content" aria-hidden="true"><span>问题不大</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="差一点"><span class="shortcut-default-text">差一点</span><span class="shortcut-hover-content" aria-hidden="true"><span>差一点</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-add-button shortcut-add-button-n" type="button" data-shortcut-group="N" aria-label="添加失分弹幕"><img class="shortcut-add-icon" src="src/add_N.png" alt=""></button>
+            </div>
+
+            <div class="shortcut-context-row shortcut-context-row-n" data-shortcut-group="N">
+              <span class="shortcut-context-label">嘲讽：</span>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="就这？"><span class="shortcut-default-text">就这？</span><span class="shortcut-hover-content" aria-hidden="true"><span>就这？</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="拉完了"><span class="shortcut-default-text">拉完了</span><span class="shortcut-hover-content" aria-hidden="true"><span>拉完了</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="幽默"><span class="shortcut-default-text">幽默</span><span class="shortcut-hover-content" aria-hidden="true"><span>幽默</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-add-button shortcut-add-button-n" type="button" data-shortcut-group="N" aria-label="添加嘲讽弹幕"><img class="shortcut-add-icon" src="src/add_N.png" alt=""></button>
+            </div>
+
+            <div class="shortcut-context-row shortcut-context-row-n" data-shortcut-group="N">
+              <span class="shortcut-context-label">质疑：</span>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="啊？"><span class="shortcut-default-text">啊？</span><span class="shortcut-hover-content" aria-hidden="true"><span>啊？</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="裁判拉完了"><span class="shortcut-default-text">裁判拉完了</span><span class="shortcut-hover-content" aria-hidden="true"><span>裁判拉完了</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="离谱"><span class="shortcut-default-text">离谱</span><span class="shortcut-hover-content" aria-hidden="true"><span>离谱</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+              <button class="shortcut-add-button shortcut-add-button-n" type="button" data-shortcut-group="N" aria-label="添加质疑弹幕"><img class="shortcut-add-icon" src="src/add_N.png" alt=""></button>
+            </div>
+
+            <div class="shortcut-context-row shortcut-context-row-i" data-shortcut-group="I">
+              <span class="shortcut-context-label">等待：</span>
+              <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="紧张"><span class="shortcut-default-text">紧张</span><span class="shortcut-hover-content" aria-hidden="true"><span>紧张</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="窒息了"><span class="shortcut-default-text">窒息了</span><span class="shortcut-hover-content" aria-hidden="true"><span>窒息了</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="加油"><span class="shortcut-default-text">加油</span><span class="shortcut-hover-content" aria-hidden="true"><span>加油</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="求求了"><span class="shortcut-default-text">求求了</span><span class="shortcut-hover-content" aria-hidden="true"><span>求求了</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+              <button class="shortcut-add-button shortcut-add-button-i" type="button" data-shortcut-group="I" aria-label="添加等待弹幕"><img class="shortcut-add-icon" src="src/add_I.png" alt=""></button>
+            </div>
+
+            <div class="shortcut-context-row shortcut-context-row-i" data-shortcut-group="I">
+              <span class="shortcut-context-label">疑惑：</span>
+              <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="什么情况"><span class="shortcut-default-text">什么情况</span><span class="shortcut-hover-content" aria-hidden="true"><span>什么情况</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="没看清"><span class="shortcut-default-text">没看清</span><span class="shortcut-hover-content" aria-hidden="true"><span>没看清</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+              <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="?"><span class="shortcut-default-text">?</span><span class="shortcut-hover-content" aria-hidden="true"><span>?</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+              <button class="shortcut-add-button shortcut-add-button-i" type="button" data-shortcut-group="I" aria-label="添加疑惑弹幕"><img class="shortcut-add-icon" src="src/add_I.png" alt=""></button>
+            </div>
+
+          </div>
+        </aside>
+      </div>
+
       <div class="camera-column">
         <aside class="camera-panel" aria-label="Camera preview">
           <video id="cameraPreview" autoplay muted playsinline></video>
@@ -205,11 +213,31 @@
           <div id="gestureStatus" class="gesture-status hidden">正在识别手势</div>
           <div id="gestureResult" class="gesture-result hidden">成功发送弹幕：厉害</div>
         </aside>
-        <pre id="gestureDebug" class="gesture-debug hidden" aria-label="Gesture debug output"></pre>
       </div>
     </div>
   </main>
 
-  <script src="script.js?v=20260601"></script>
+  <dialog id="shortcutDialog" class="shortcut-dialog" aria-labelledby="shortcutDialogTitle">
+    <form id="shortcutDialogForm" class="shortcut-dialog-form" novalidate>
+      <h2 id="shortcutDialogTitle" class="shortcut-dialog-title">添加弹幕</h2>
+      <label class="shortcut-dialog-label" for="shortcutDialogInput">弹幕内容</label>
+      <input
+        id="shortcutDialogInput"
+        class="shortcut-dialog-input"
+        type="text"
+        maxlength="30"
+        autocomplete="off"
+        placeholder="请输入新的弹幕"
+        required
+      >
+      <p id="shortcutDialogError" class="shortcut-dialog-error" aria-live="polite"></p>
+      <div class="shortcut-dialog-actions">
+        <button id="shortcutDialogCancel" class="shortcut-dialog-cancel" type="button">取消</button>
+        <button class="shortcut-dialog-confirm" type="submit">添加</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="script.js?v=20260626-danmaku-state-decoupled"></script>
 </body>
 </html>

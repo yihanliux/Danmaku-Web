@@ -1,17 +1,44 @@
-"""Gesture recognition configuration.
+"""动作识别配置文件。
 
-Keep experiment settings here so they are easy to adjust later:
-- what danmaku text each recognized action sends
-- how long the same action must cool down before it can send again
-- which actions must be held before sending
+这个文件集中保存实验过程中经常需要修改的配置：
+- 哪些动作允许被识别；
+- 每个动作发送什么弹幕；
+- 同一个动作发送后的冷却时间；
+- 每个动作需要连续维持多长时间。
 """
 
 
-# The same recognized action can send at most once within this many seconds.
+# 同一个动作发送弹幕后，需要等待多少秒才允许再次发送。
 SAME_GESTURE_COOLDOWN_SECONDS = 10
 
 
-# Danmaku text sent by each recognized action.
+# 动作识别总开关。
+# True：允许识别并发送这个动作。
+# False：禁用这个动作；即使判定条件满足，也不会返回或发送该动作。
+# 关闭一个高优先级动作后，分类器会继续尝试识别后面的其他已开启动作。
+GESTURE_ENABLED = {
+    "Raising One Fist": True,
+    "Thumbs-Up": False,
+    "Thumbs-Down": True,
+    "Three-Point Gesture": True,
+    "Raising Both Fists": False,
+    "Pressing Both Hands Downward": False,
+    "Opening Both Palms Upward": True,
+    "Pressing Palms Together": True,
+    "Clasping Hands": True,
+    "Head Tilting": False,
+    "Hands On Head": True,
+    "Touching Hair": False,
+    "Covering Face": False,
+    "Covering Mouth": True,
+    "Touching Chin": True,
+    "Head Shaking": True,
+}
+
+
+# 每个动作成功识别后发送的弹幕文字。
+# key 必须和 gesture_classifier.py 返回的动作名称完全一致。
+# value 是最终写入参与者弹幕文件、并在前端弹幕层显示的文本。
 GESTURE_DANMAKU_TEXT = {
     "Raising One Fist": "Raising One Fist",
     "Thumbs-Up": "Thumbs-Up",
@@ -27,12 +54,14 @@ GESTURE_DANMAKU_TEXT = {
     "Touching Hair": "Touching Hair",
     "Covering Face": "Covering Face",
     "Covering Mouth": "Covering Mouth",
+    "Touching Chin": "Touching Chin",
+    "Head Shaking": "Head Shaking",
 }
 
 
-# Actions listed here must be continuously recognized for the configured
-# number of seconds before the front end sends their danmaku.
-# Actions not listed here are sent immediately after recognition and cooldown.
+# 每个动作需要连续维持多少秒，才允许发送弹幕。
+# 没有写在这里的动作默认不需要维持，识别到后即可发送。
+# 这个配置由前端执行：后端只返回规则，前端负责计时和冷却判断。
 GESTURE_HOLD_SECONDS = {
     "Raising One Fist": 0.5,
     "Thumbs-Up": 0.5,
@@ -48,22 +77,29 @@ GESTURE_HOLD_SECONDS = {
     "Touching Hair": 0.3,
     "Covering Face": 0.5,
     "Covering Mouth": 0.5,
+    "Touching Chin": 0.5,
+    "Head Shaking": 0,
 }
 
 
 def get_danmaku_text(gesture):
-    """Return the danmaku text that should be sent for a recognized action."""
+    """返回动作成功识别后需要发送的弹幕文字。"""
     return GESTURE_DANMAKU_TEXT.get(gesture, "")
 
 
 def get_hold_seconds(gesture):
-    """Return how long this action must be held before sending."""
+    """返回动作发送前需要连续维持的秒数。"""
     return GESTURE_HOLD_SECONDS.get(gesture, 0)
 
 
 def get_gesture_send_rule(gesture):
-    """Return all front-end sending rules for a recognized action."""
+    """返回前端发送某个动作弹幕时需要遵守的规则。"""
     return {
         "cooldownSeconds": SAME_GESTURE_COOLDOWN_SECONDS,
         "holdSeconds": get_hold_seconds(gesture),
     }
+
+
+def is_gesture_enabled(gesture):
+    """返回某个动作当前是否允许被识别。"""
+    return GESTURE_ENABLED.get(gesture, False)

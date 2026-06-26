@@ -16,6 +16,8 @@
 
 import base64
 import os
+import time
+from collections import deque
 from types import SimpleNamespace
 
 import cv2
@@ -25,7 +27,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from mediapipe.python._framework_bindings import resource_util
 
-from gesture_config import get_danmaku_text, get_gesture_send_rule
+from gesture_config import get_danmaku_text, get_gesture_send_rule, is_gesture_enabled
 
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -91,6 +93,15 @@ LEFT_WRIST_POSE = 15
 RIGHT_WRIST_POSE = 16
 HEAD_TILT_ANGLE_THRESHOLD = 20
 
+# Head Shaking 是动态动作，需要观察短时间窗口内的头部左右摆动。
+# 这里不用单帧姿态，而是记录 nose 相对双耳中心的横向偏移：
+#   head_yaw = (nose.x - 双耳中心.x) / 双耳距离
+# 正负号表示鼻子偏向左右哪一侧，绝对值表示偏移幅度。
+HEAD_SHAKE_WINDOW_SECONDS = 2.4
+HEAD_SHAKE_MIN_SAMPLES = 3
+HEAD_SHAKE_YAW_THRESHOLD = 0.03
+HEAD_SHAKE_RANGE_THRESHOLD = 0.08
+
 # Covering Face / Covering Mouth 使用的距离都不是像素距离，而是归一化距离。
 # 归一化使用的尺度是 face_scale：
 #   face_scale = max(双耳距离, 肩宽 * 0.28, 0.08)
@@ -154,6 +165,23 @@ FACE_COVER_BELOW_TARGET_THRESHOLD = 0.3
 # 手部候选点仍然必须靠近目标区域，并且满足上下方向限制。
 FACE_COVER_VISIBILITY_THRESHOLD = 0.25
 
+# Touching Chin 没有可以直接使用的 pose 下巴关键点，因此使用“嘴巴中心向下偏移”
+# 来估算下巴中心。下面所有距离同样使用 face_scale 做归一化。
+# 下巴中心 = 嘴巴中心 + face_scale * CHIN_CENTER_VERTICAL_OFFSET。
+CHIN_CENTER_VERTICAL_OFFSET = 0.55
+
+# 手部候选点到估算下巴中心的最大归一化距离。
+CHIN_TOUCH_DISTANCE_THRESHOLD = 0.65
+
+# 手部候选点相对下巴中心允许的最大横向偏移。
+CHIN_TOUCH_HORIZONTAL_THRESHOLD = 0.75
+
+# 手部候选点相对下巴中心允许的最大纵向偏移。
+CHIN_TOUCH_VERTICAL_THRESHOLD = 0.55
+
+# 手部候选点至少需要位于嘴巴中心下方多少，避免捂嘴被判定为摸下巴。
+CHIN_TOUCH_MIN_BELOW_MOUTH = 0.15
+
 # Touching Hair / Hands On Head 使用下面这组头部接触阈值。
 # 它们也会用类似 face_scale 的头部尺度做归一化。
 # 这类动作的判定范围故意比 Covering Face / Covering Mouth 更宽，
@@ -191,6 +219,8 @@ class GestureClassifier:
 
     def __init__(self):
         self._set_resource_dir()
+        self.head_shake_samples = deque()
+        self.last_head_shake_sample_at = 0
 
         # 前端只画手部关键点，所以这里保存 hand landmark 的连接关系。
         # 如果以后也想在前端画身体骨架，可以再增加 pose connections。
@@ -337,12 +367,15 @@ class GestureClassifier:
 
         hands = self._hand_debug(result)
 
-        if all(hand["category"] == "Closed_Fist" and hand["score"] >= TWO_HAND_GESTURE_SCORE_THRESHOLD for hand in hands):
+        if (
+            is_gesture_enabled("Raising Both Fists")
+            and all(hand["category"] == "Closed_Fist" and hand["score"] >= TWO_HAND_GESTURE_SCORE_THRESHOLD for hand in hands)
+        ):
             return "Raising Both Fists"
 
         clasped_hands = self._clasped_hands_debug(result.hand_landmarks)
 
-        if clasped_hands["matched"]:
+        if is_gesture_enabled("Clasping Hands") and clasped_hands["matched"]:
             return "Clasping Hands"
 
         if not all(hand["open"] for hand in hands):
@@ -350,13 +383,19 @@ class GestureClassifier:
 
         palms_together = self._palms_together_debug(result.hand_landmarks)
 
-        if palms_together["matched"]:
+        if is_gesture_enabled("Pressing Palms Together") and palms_together["matched"]:
             return "Pressing Palms Together"
 
-        if all(hand["palmUpDownScore"] <= -PALM_UP_DOWN_THRESHOLD for hand in hands):
+        if (
+            is_gesture_enabled("Pressing Both Hands Downward")
+            and all(hand["palmUpDownScore"] <= -PALM_UP_DOWN_THRESHOLD for hand in hands)
+        ):
             return "Pressing Both Hands Downward"
 
-        if all(hand["palmUpDownScore"] >= PALM_UP_DOWN_THRESHOLD for hand in hands):
+        if (
+            is_gesture_enabled("Opening Both Palms Upward")
+            and all(hand["palmUpDownScore"] >= PALM_UP_DOWN_THRESHOLD for hand in hands)
+        ):
             return "Opening Both Palms Upward"
 
         return None
@@ -370,26 +409,37 @@ class GestureClassifier:
         if category.score < BUILT_IN_GESTURE_SCORE_THRESHOLD:
             return None
 
-        return BUILT_IN_GESTURE_MAP.get(category.category_name)
+        gesture = BUILT_IN_GESTURE_MAP.get(category.category_name)
+        return gesture if is_gesture_enabled(gesture) else None
 
     def _recognize_custom_gesture(self, hand_landmarks):
         """识别本项目自己写规则的单手动作，目前是 Three-Point Gesture。"""
         for landmarks in hand_landmarks:
-            if self._is_three_point_gesture(landmarks):
+            if is_gesture_enabled("Three-Point Gesture") and self._is_three_point_gesture(landmarks):
                 return "Three-Point Gesture"
 
         return None
 
     def _recognize_face_cover_gesture(self, pose_result, hand_landmarks):
+        """优先识别脸部附近动作。
+
+        Covering Face、Covering Mouth 和 Touching Chin 都依赖脸部关键点和手部候选点。
+        它们放在双手/单手手势之前，是为了避免“手靠近脸”时被误判成其他普通手势。
+        """
         covering_face = self._covering_face_debug(pose_result, hand_landmarks)
 
-        if covering_face["matched"]:
+        if is_gesture_enabled("Covering Face") and covering_face["matched"]:
             return "Covering Face"
 
         covering_mouth = self._covering_mouth_debug(pose_result, hand_landmarks)
 
-        if covering_mouth["matched"]:
+        if is_gesture_enabled("Covering Mouth") and covering_mouth["matched"]:
             return "Covering Mouth"
+
+        touching_chin = self._touching_chin_debug(pose_result, hand_landmarks)
+
+        if is_gesture_enabled("Touching Chin") and touching_chin["matched"]:
+            return "Touching Chin"
 
         return None
 
@@ -401,27 +451,37 @@ class GestureClassifier:
         """
         covering_face = self._covering_face_debug(pose_result, hand_landmarks)
 
-        if covering_face["matched"]:
+        if is_gesture_enabled("Covering Face") and covering_face["matched"]:
             return "Covering Face"
 
         covering_mouth = self._covering_mouth_debug(pose_result, hand_landmarks)
 
-        if covering_mouth["matched"]:
+        if is_gesture_enabled("Covering Mouth") and covering_mouth["matched"]:
             return "Covering Mouth"
+
+        touching_chin = self._touching_chin_debug(pose_result, hand_landmarks)
+
+        if is_gesture_enabled("Touching Chin") and touching_chin["matched"]:
+            return "Touching Chin"
 
         hands_on_head = self._hands_on_head_debug(pose_result)
 
-        if hands_on_head["matched"]:
+        if is_gesture_enabled("Hands On Head") and hands_on_head["matched"]:
             return "Hands On Head"
 
         touching_hair = self._touching_hair_debug(pose_result)
 
-        if touching_hair["matched"]:
+        if is_gesture_enabled("Touching Hair") and touching_hair["matched"]:
             return "Touching Hair"
+
+        head_shaking = self._head_shaking_debug(pose_result)
+
+        if is_gesture_enabled("Head Shaking") and head_shaking["matched"]:
+            return "Head Shaking"
 
         head_tilt = self._head_tilt_debug(pose_result)
 
-        if head_tilt["matched"]:
+        if is_gesture_enabled("Head Tilting") and head_tilt["matched"]:
             return "Head Tilting"
 
         return None
@@ -479,13 +539,15 @@ class GestureClassifier:
             "poseCount": len(pose_result.pose_landmarks),
             "coveringFace": self._covering_face_debug(pose_result, hand_landmarks),
             "coveringMouth": self._covering_mouth_debug(pose_result, hand_landmarks),
+            "touchingChin": self._touching_chin_debug(pose_result, hand_landmarks),
             "handsOnHead": self._hands_on_head_debug(pose_result),
             "touchingHair": self._touching_hair_debug(pose_result),
+            "headShaking": self._head_shaking_debug(pose_result),
             "headTilt": self._head_tilt_debug(pose_result),
         }
 
     def _covering_face_debug(self, pose_result, hand_landmarks=None):
-        """判断 Covering Face：任意一只手腕靠近眼睛区域，或遮挡眼睛且手在脸部附近。"""
+        """判断 Covering Face：手部候选点靠近眼睛区域，并满足遮挡方向和可见性约束。"""
         return self._face_region_cover_debug(
             pose_result,
             hand_landmarks,
@@ -501,10 +563,10 @@ class GestureClassifier:
         )
 
     def _covering_mouth_debug(self, pose_result, hand_landmarks=None):
-        """判断 Covering Mouth：任意一只手腕靠近嘴部区域，或遮挡嘴部且手在脸部附近。"""
+        """判断 Covering Mouth：手部候选点靠近嘴部区域，并排除合掌动作的干扰。"""
         palms_together = self._palms_together_debug(hand_landmarks or [])
 
-        if palms_together["matched"]:
+        if is_gesture_enabled("Pressing Palms Together") and palms_together["matched"]:
             return {
                 "matched": False,
                 "reason": "blockedByPalmsTogether",
@@ -518,7 +580,162 @@ class GestureClassifier:
             region_indices=(MOUTH_LEFT, MOUTH_RIGHT),
         )
 
+    def _touching_chin_debug(self, pose_result, hand_landmarks=None):
+        """判断 Touching Chin：任意一只手的手腕、手掌或手指靠近估算的下巴区域。"""
+        if not pose_result.pose_landmarks:
+            return {
+                "matched": False,
+                "reason": "noPose",
+            }
+
+        palms_together = self._palms_together_debug(hand_landmarks or [])
+
+        if is_gesture_enabled("Pressing Palms Together") and palms_together["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByPalmsTogether",
+                "palmsTogether": palms_together,
+            }
+
+        clasped_hands = self._clasped_hands_debug(hand_landmarks or [])
+
+        if is_gesture_enabled("Clasping Hands") and clasped_hands["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByClaspingHands",
+                "claspedHands": clasped_hands,
+            }
+
+        landmarks = pose_result.pose_landmarks[0]
+        visible_mouth_points = [
+            landmarks[index]
+            for index in (MOUTH_LEFT, MOUTH_RIGHT)
+            if self._pose_landmark_visible(landmarks[index])
+        ]
+
+        if not visible_mouth_points:
+            return {
+                "matched": False,
+                "reason": "missingMouthLandmarks",
+                "visibility": {
+                    "mouthLeft": self._pose_visibility(landmarks[MOUTH_LEFT]),
+                    "mouthRight": self._pose_visibility(landmarks[MOUTH_RIGHT]),
+                },
+            }
+
+        face_scale = self._face_scale(landmarks)
+        mouth_center = self._average_point(visible_mouth_points)
+        chin_center = SimpleNamespace(
+            x=mouth_center.x,
+            y=mouth_center.y + face_scale * CHIN_CENTER_VERTICAL_OFFSET,
+            z=mouth_center.z,
+        )
+        left_debug = self._pose_wrist_chin_debug(
+            landmarks[LEFT_WRIST_POSE],
+            mouth_center,
+            chin_center,
+            face_scale,
+        )
+        right_debug = self._pose_wrist_chin_debug(
+            landmarks[RIGHT_WRIST_POSE],
+            mouth_center,
+            chin_center,
+            face_scale,
+        )
+        hand_landmark_debug = self._hand_landmark_chin_debug(
+            hand_landmarks,
+            mouth_center,
+            chin_center,
+            face_scale,
+        )
+        matched = (
+            left_debug["touching"]
+            or right_debug["touching"]
+            or hand_landmark_debug["touching"]
+        )
+
+        return {
+            "matched": matched,
+            "reason": None,
+            "leftTouching": left_debug["touching"],
+            "rightTouching": right_debug["touching"],
+            "handLandmarkTouching": hand_landmark_debug["touching"],
+            "left": left_debug,
+            "right": right_debug,
+            "handLandmark": hand_landmark_debug,
+            "faceScale": face_scale,
+            "mouthCenter": self._point_debug(mouth_center),
+            "chinCenter": self._point_debug(chin_center),
+            "chinCenterVerticalOffset": CHIN_CENTER_VERTICAL_OFFSET,
+        }
+
+    def _pose_wrist_chin_debug(self, wrist, mouth_center, chin_center, face_scale):
+        """检查 pose 模型中的单个手腕点是否接近估算下巴区域。"""
+        if not self._pose_landmark_visible(wrist):
+            return {
+                "touching": False,
+                "reason": "missingWrist",
+                "visibility": self._pose_visibility(wrist),
+            }
+
+        return self._chin_point_debug(wrist, mouth_center, chin_center, face_scale)
+
+    def _hand_landmark_chin_debug(self, hand_landmarks, mouth_center, chin_center, face_scale):
+        """在 hand 模型的多个手部点中，找出最接近下巴区域的候选点。"""
+        candidates = []
+
+        for hand_index, landmarks in enumerate(hand_landmarks or []):
+            for point_index in FACE_COVER_HAND_POINTS:
+                if point_index < len(landmarks):
+                    candidate = self._chin_point_debug(
+                        landmarks[point_index],
+                        mouth_center,
+                        chin_center,
+                        face_scale,
+                    )
+                    candidate["handIndex"] = hand_index
+                    candidate["pointIndex"] = point_index
+                    candidates.append(candidate)
+
+        if not candidates:
+            return {
+                "touching": False,
+                "reason": "noHandLandmarks",
+            }
+
+        return min(candidates, key=lambda candidate: candidate["distanceToChin"])
+
+    def _chin_point_debug(self, point, mouth_center, chin_center, face_scale):
+        """计算一个手部候选点相对下巴区域的距离、方向和命中结果。"""
+        distance_to_chin = self._distance_2d(point, chin_center) / (face_scale or 1)
+        horizontal_distance = abs(point.x - chin_center.x) / (face_scale or 1)
+        vertical_distance = abs(point.y - chin_center.y) / (face_scale or 1)
+        below_mouth_distance = (point.y - mouth_center.y) / (face_scale or 1)
+        touching = (
+            distance_to_chin <= CHIN_TOUCH_DISTANCE_THRESHOLD
+            and horizontal_distance <= CHIN_TOUCH_HORIZONTAL_THRESHOLD
+            and vertical_distance <= CHIN_TOUCH_VERTICAL_THRESHOLD
+            and below_mouth_distance >= CHIN_TOUCH_MIN_BELOW_MOUTH
+        )
+
+        return {
+            "touching": touching,
+            "distanceToChin": distance_to_chin,
+            "distanceThreshold": CHIN_TOUCH_DISTANCE_THRESHOLD,
+            "horizontalDistance": horizontal_distance,
+            "horizontalThreshold": CHIN_TOUCH_HORIZONTAL_THRESHOLD,
+            "verticalDistance": vertical_distance,
+            "verticalThreshold": CHIN_TOUCH_VERTICAL_THRESHOLD,
+            "belowMouthDistance": below_mouth_distance,
+            "minBelowMouth": CHIN_TOUCH_MIN_BELOW_MOUTH,
+        }
+
     def _face_region_cover_debug(self, pose_result, hand_landmarks, region_name, region_indices):
+        """通用的脸部区域遮挡判断。
+
+        region_indices 决定目标区域是眼睛还是嘴巴。
+        函数同时检查 pose 手腕点和 hand 模型关键点，取它们各自最接近目标区域的结果。
+        """
         if not pose_result.pose_landmarks:
             return {
                 "matched": False,
@@ -583,6 +800,7 @@ class GestureClassifier:
         }
 
     def _is_face_region_covered_by_wrist(self, wrist_debug, has_low_region_visibility):
+        """根据距离、上下方向和目标区域可见性，判断候选点是否真正构成遮挡。"""
         if wrist_debug.get("reason"):
             return False
 
@@ -597,6 +815,7 @@ class GestureClassifier:
         )
 
     def _wrist_face_region_debug(self, wrist, target_points, target_center, face_scale):
+        """计算 pose 手腕点相对眼睛/嘴巴目标区域的调试信息。"""
         if not self._pose_landmark_visible(wrist):
             return {
                 "covering": False,
@@ -641,6 +860,7 @@ class GestureClassifier:
         }
 
     def _hand_landmark_face_region_debug(self, hand_landmarks, target_points, target_center, face_scale):
+        """从 hand 模型关键点中选择最接近脸部目标区域的候选点。"""
         candidates = []
 
         for hand_index, landmarks in enumerate(hand_landmarks or []):
@@ -669,6 +889,7 @@ class GestureClassifier:
         return min(candidates, key=lambda candidate: candidate["nearestDistance"])
 
     def _face_region_point_debug(self, point, target_points, target_center, face_scale):
+        """计算单个 hand 关键点相对眼睛/嘴巴目标区域的调试信息。"""
         nearest_distance = min(
             [self._distance_2d(point, target_point) for target_point in (*target_points, target_center)]
         ) / (face_scale or 1)
@@ -704,6 +925,7 @@ class GestureClassifier:
         }
 
     def _face_scale(self, landmarks):
+        """估算脸部尺度，用于把像素无关的归一化距离转换为相对距离。"""
         left_ear = landmarks[LEFT_EAR]
         right_ear = landmarks[RIGHT_EAR]
         left_shoulder = landmarks[LEFT_SHOULDER]
@@ -715,6 +937,7 @@ class GestureClassifier:
         return max(head_width, shoulder_width * 0.28, HEAD_TOUCH_FALLBACK_SCALE)
 
     def _face_visibility_debug(self, landmarks):
+        """汇总脸部、嘴部和手腕关键点的 visibility，帮助排查关键点缺失问题。"""
         return {
             "nose": self._pose_visibility(landmarks[NOSE]),
             "leftEyeInner": self._pose_visibility(landmarks[LEFT_EYE_INNER]),
@@ -842,6 +1065,7 @@ class GestureClassifier:
         }
 
     def _wrist_head_touch_debug(self, wrist, head_points, head_center, head_scale):
+        """判断单个手腕是否接近头部区域，并返回用于调参的中间值。"""
         if not self._pose_landmark_visible(wrist):
             return {
                 "touching": False,
@@ -871,6 +1095,117 @@ class GestureClassifier:
             "nearHeadPoint": near_head_point,
             "insideHeadZone": inside_head_zone,
         }
+
+    def _head_shaking_debug(self, pose_result):
+        """判断 Head Shaking：短时间窗口内头部横向偏移先后越过左右阈值。
+
+        这个动作不能靠单帧判断，所以这里维护最近几帧的 head_yaw 序列。
+        head_yaw 使用鼻子相对双耳中心的横向偏移，并除以双耳距离做归一化。
+        """
+        if not pose_result.pose_landmarks:
+            self.head_shake_samples.clear()
+            return {
+                "matched": False,
+                "reason": "noPose",
+            }
+
+        landmarks = pose_result.pose_landmarks[0]
+        required_indices = (NOSE, LEFT_EAR, RIGHT_EAR)
+
+        if not all(self._pose_landmark_visible(landmarks[index]) for index in required_indices):
+            self.head_shake_samples.clear()
+            return {
+                "matched": False,
+                "reason": "missingLandmarks",
+                "visibility": {
+                    "nose": self._pose_visibility(landmarks[NOSE]),
+                    "leftEar": self._pose_visibility(landmarks[LEFT_EAR]),
+                    "rightEar": self._pose_visibility(landmarks[RIGHT_EAR]),
+                },
+            }
+
+        now = time.monotonic()
+        nose = landmarks[NOSE]
+        left_ear = landmarks[LEFT_EAR]
+        right_ear = landmarks[RIGHT_EAR]
+        ear_width = self._distance_2d(left_ear, right_ear)
+
+        if ear_width <= 0:
+            self.head_shake_samples.clear()
+            return {
+                "matched": False,
+                "reason": "invalidEarWidth",
+            }
+
+        ear_center = self._midpoint(left_ear, right_ear)
+        yaw = (nose.x - ear_center.x) / ear_width
+
+        # 同一帧可能会被识别流程和 debug 流程各调用一次；间隔过短时不重复采样。
+        if now - self.last_head_shake_sample_at >= 0.2:
+            self.head_shake_samples.append({
+                "time": now,
+                "yaw": yaw,
+            })
+            self.last_head_shake_sample_at = now
+
+        while self.head_shake_samples and now - self.head_shake_samples[0]["time"] > HEAD_SHAKE_WINDOW_SECONDS:
+            self.head_shake_samples.popleft()
+
+        yaw_values = [sample["yaw"] for sample in self.head_shake_samples]
+
+        if len(yaw_values) < HEAD_SHAKE_MIN_SAMPLES:
+            return {
+                "matched": False,
+                "reason": "notEnoughSamples",
+                "sampleCount": len(yaw_values),
+                "yaw": yaw,
+                "yawThreshold": HEAD_SHAKE_YAW_THRESHOLD,
+                "rangeThreshold": HEAD_SHAKE_RANGE_THRESHOLD,
+            }
+
+        min_yaw = min(yaw_values)
+        max_yaw = max(yaw_values)
+        yaw_range = max_yaw - min_yaw
+        has_left = min_yaw <= -HEAD_SHAKE_YAW_THRESHOLD
+        has_right = max_yaw >= HEAD_SHAKE_YAW_THRESHOLD
+        direction_changes = self._head_shake_direction_changes(yaw_values)
+        matched = (
+            has_left
+            and has_right
+            and yaw_range >= HEAD_SHAKE_RANGE_THRESHOLD
+            and direction_changes >= 1
+        )
+
+        return {
+            "matched": matched,
+            "reason": None,
+            "sampleCount": len(yaw_values),
+            "yaw": yaw,
+            "minYaw": min_yaw,
+            "maxYaw": max_yaw,
+            "yawRange": yaw_range,
+            "yawThreshold": HEAD_SHAKE_YAW_THRESHOLD,
+            "rangeThreshold": HEAD_SHAKE_RANGE_THRESHOLD,
+            "directionChanges": direction_changes,
+            "windowSeconds": HEAD_SHAKE_WINDOW_SECONDS,
+        }
+
+    def _head_shake_direction_changes(self, yaw_values):
+        """统计窗口中左右方向越过阈值后的切换次数。"""
+        directions = []
+
+        for yaw in yaw_values:
+            if yaw >= HEAD_SHAKE_YAW_THRESHOLD:
+                direction = 1
+            elif yaw <= -HEAD_SHAKE_YAW_THRESHOLD:
+                direction = -1
+            else:
+                continue
+
+            if not directions or directions[-1] != direction:
+                directions.append(direction)
+
+        return max(0, len(directions) - 1)
 
     def _head_tilt_debug(self, pose_result):
         """判断是否歪头。
