@@ -58,6 +58,9 @@ const shortcutManageButton = document.getElementById("shortcutManageButton");
 const shortcutManageIcon = document.getElementById("shortcutManageIcon");
 const shortcutManageMenu = document.getElementById("shortcutManageMenu");
 const shortcutManageWrapper = document.querySelector(".shortcut-manage-wrapper");
+const shortcutTitle = document.querySelector(".shortcuts-title");
+const shortcutSetupHint = document.getElementById("shortcutSetupHint");
+const shortcutConfirmButton = document.getElementById("shortcutConfirmButton");
 const shortcutDialog = document.getElementById("shortcutDialog");
 const shortcutDialogForm = document.getElementById("shortcutDialogForm");
 const shortcutDialogTitle = document.getElementById("shortcutDialogTitle");
@@ -119,6 +122,7 @@ let cameraStream = null;
 let gestureTimer = null;
 let shortcutAddButton = null;
 let isShortcutDeleteMode = false;
+let isShortcutSetupMode = true;
 let isGestureRequestRunning = false;
 let currentHeldGesture = null;
 let currentHeldGestureStartedAt = 0;
@@ -140,7 +144,7 @@ function isGestureTriggeredCondition() {
 }
 
 function canTypeDanmaku() {
-  return currentCondition === "baseline";
+  return true;
 }
 
 function updateConditionUi() {
@@ -246,14 +250,27 @@ function resetControls() {
   volumePanel.classList.add("hidden");
 }
 
+function hasSelectedVideo() {
+  return Boolean(videoPlayer.currentSrc || videoPlayer.src);
+}
+
+function canStartVideoPlayback() {
+  return hasSelectedVideo() && !isShortcutSetupMode;
+}
+
+function updatePlaybackAvailability() {
+  const canUsePlaybackControls = canStartVideoPlayback();
+  playButton.disabled = !canUsePlaybackControls;
+  progressBar.disabled = !canUsePlaybackControls;
+}
+
 /*
   视频加载成功后启用控制栏。
   loadedmetadata 事件触发后，浏览器已经知道视频时长了，
   这时才能正确显示总时长，并允许用户拖动进度条。
 */
 function enableControls() {
-  playButton.disabled = false;
-  progressBar.disabled = false;
+  updatePlaybackAvailability();
   updateProgress();
 }
 
@@ -348,7 +365,7 @@ videoInput.addEventListener("change", () => {
   如果当前正在播放，就调用 pause()。
 */
 playButton.addEventListener("click", () => {
-  if (!videoPlayer.src) {
+  if (!canStartVideoPlayback()) {
     return;
   }
 
@@ -515,7 +532,7 @@ function updateDanmakuSettings() {
 
 /*
   根据弹幕开关状态和输入框内容决定 Send 按钮是否可用。
-  只有弹幕开启且输入内容非空时，才允许用户手动发送。
+  只要输入内容非空，就允许用户手动发送；弹幕开关只控制屏幕上是否显示弹幕。
 */
 function updateDanmakuSendButton() {
   danmakuSendButton.disabled = !canTypeDanmaku() || danmakuInput.value.trim() === "";
@@ -625,6 +642,72 @@ function sendShortcutDanmaku(event) {
   sendParticipantDanmakuText(text, "shortcut");
 }
 
+function getShortcutRows() {
+  return Array.from(shortcutsButtons.querySelectorAll(".shortcut-context-row"));
+}
+
+function updateShortcutSetupUi() {
+  shortcutsPanel.classList.toggle("is-shortcut-setup-mode", isShortcutSetupMode);
+  shortcutsPanel.classList.toggle("is-shortcut-send-mode", !isShortcutSetupMode);
+  shortcutTitle.textContent = isShortcutSetupMode ? "快捷弹幕设置" : "弹幕一键发送";
+  shortcutSetupHint.textContent = isShortcutSetupMode
+    ? "请为每个情境选择一条偏好的弹幕，或自定义一条作为快捷弹幕。"
+    : "视频已可播放。点击下方快捷弹幕，即可一键发送对应弹幕。";
+  shortcutSetupHint.classList.remove("hidden");
+  shortcutConfirmButton.classList.toggle("hidden", !isShortcutSetupMode);
+  shortcutManageWrapper.classList.add("hidden");
+
+  if (!isShortcutSetupMode) {
+    return;
+  }
+
+  const rows = getShortcutRows();
+  const isComplete = rows.length > 0
+    && rows.every((row) => row.querySelector(".shortcut-button.is-shortcut-selected"));
+  shortcutConfirmButton.disabled = !isComplete;
+}
+
+function selectShortcutButton(button) {
+  const row = button.closest(".shortcut-context-row");
+
+  if (!row) {
+    return;
+  }
+
+  row.querySelectorAll(".shortcut-button").forEach((rowButton) => {
+    const isSelected = rowButton === button;
+    rowButton.classList.toggle("is-shortcut-selected", isSelected);
+    rowButton.setAttribute("aria-pressed", String(isSelected));
+  });
+
+  updateShortcutSetupUi();
+}
+
+function confirmShortcutSetup() {
+  if (shortcutConfirmButton.disabled) {
+    return;
+  }
+
+  getShortcutRows().forEach((row) => {
+    row.querySelectorAll(".shortcut-button").forEach((button) => {
+      if (!button.classList.contains("is-shortcut-selected")) {
+        button.remove();
+        return;
+      }
+
+      button.classList.remove("is-shortcut-selected");
+      button.removeAttribute("aria-pressed");
+    });
+
+    row.querySelector(".shortcut-add-button")?.remove();
+  });
+
+  isShortcutSetupMode = false;
+  setShortcutDeleteMode(false);
+  updateShortcutSetupUi();
+  updatePlaybackAvailability();
+}
+
 function getShortcutGroupClassSuffix(group) {
   return String(group || "").toLowerCase();
 }
@@ -636,6 +719,7 @@ function createShortcutButton(text, group = "P") {
   button.type = "button";
   button.dataset.shortcutGroup = normalizedGroup;
   button.dataset.danmakuText = text;
+  button.setAttribute("aria-pressed", "false");
 
   const defaultText = document.createElement("span");
   defaultText.className = "shortcut-default-text";
@@ -688,7 +772,17 @@ function submitShortcutDialog(event) {
   if (shortcutAddButton) {
     const row = shortcutAddButton.closest(".shortcut-context-row");
     const group = shortcutAddButton.dataset.shortcutGroup || row?.dataset.shortcutGroup || "P";
-    shortcutAddButton.before(createShortcutButton(trimmedText, group));
+    const newButton = createShortcutButton(trimmedText, group);
+    shortcutAddButton.before(newButton);
+
+    if (isShortcutSetupMode) {
+      row.querySelectorAll(".shortcut-button").forEach((button) => {
+        if (button !== newButton) {
+          button.remove();
+        }
+      });
+      selectShortcutButton(newButton);
+    }
   }
 
   closeShortcutDialog();
@@ -726,6 +820,7 @@ function setShortcutDeleteMode(isActive) {
 function restoreDefaultShortcuts() {
   shortcutsButtons.innerHTML = defaultShortcutsMarkup;
   setShortcutDeleteMode(false);
+  updateShortcutSetupUi();
 }
 
 function handleShortcutManageButtonClick() {
@@ -774,6 +869,11 @@ function handleShortcutButtonsClick(event) {
   }
 
   if (shortcutButton && shortcutsButtons.contains(shortcutButton)) {
+    if (isShortcutSetupMode) {
+      selectShortcutButton(shortcutButton);
+      return;
+    }
+
     sendShortcutDanmaku({ currentTarget: shortcutButton });
   }
 }
@@ -1079,14 +1179,8 @@ function updateDanmakuControls() {
     shownDanmakuIds.clear();
   }
 
-  danmakuInput.disabled = !canTypeDanmaku();
-  danmakuInput.placeholder = canTypeDanmaku()
-    ? "Comment on this moment"
-    : "Typing unavailable";
-
-  if (!canTypeDanmaku()) {
-    danmakuInput.value = "";
-  }
+  danmakuInput.disabled = false;
+  danmakuInput.placeholder = "Comment on this moment";
 
   updateDanmakuSendButton();
 }
@@ -1696,6 +1790,12 @@ videoPlayer.addEventListener("loadedmetadata", enableControls);
 // 播放过程中持续同步进度条和当前时间。
 videoPlayer.addEventListener("timeupdate", updateProgress);
 
+videoPlayer.addEventListener("play", () => {
+  if (!canStartVideoPlayback()) {
+    videoPlayer.pause();
+  }
+});
+
 // 这些事件负责让播放按钮图标和无障碍标签保持正确。
 videoPlayer.addEventListener("play", updatePlayButton);
 videoPlayer.addEventListener("pause", updatePlayButton);
@@ -1715,6 +1815,7 @@ videoPlayer.addEventListener("ended", updateGestureRecognitionState);
 danmakuSendButton.addEventListener("click", sendDanmaku);
 
 shortcutsButtons.addEventListener("click", handleShortcutButtonsClick);
+shortcutConfirmButton.addEventListener("click", confirmShortcutSetup);
 shortcutManageButton.addEventListener("click", handleShortcutManageButtonClick);
 shortcutManageMenu.addEventListener("click", handleShortcutManageMenuClick);
 document.addEventListener("click", (event) => {
@@ -1745,6 +1846,7 @@ resetControls();
 updateDanmakuControls();
 initializeDanmakuSettingsFromCss();
 updateDanmakuAnimationState();
+updateShortcutSetupUi();
 applyExperimentCondition();
 
 // 页面打开后立即尝试启动右侧摄像头预览。
