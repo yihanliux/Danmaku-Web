@@ -27,7 +27,7 @@ const volumeWrapper = document.querySelector(".volume-wrapper");
 const volumePanel = document.getElementById("volumePanel");
 const volumeBar = document.getElementById("volumeBar");
 const volumePercent = document.getElementById("volumePercent");
-const conditionButton = document.getElementById("conditionButton");
+const conditionButtons = Array.from(document.querySelectorAll(".condition-button"));
 const cameraPreview = document.getElementById("cameraPreview");
 const handLandmarkCanvas = document.getElementById("handLandmarkCanvas");
 const cameraStatus = document.getElementById("cameraStatus");
@@ -71,18 +71,12 @@ const GESTURE_API_URL = getGestureApiUrl();
 const EXPERIMENT_CONDITIONS = [
   {
     id: "baseline",
-    label: "Baseline",
-    ariaLabel: "Current condition: baseline",
   },
   {
     id: "on-device",
-    label: "On-device shortcuts",
-    ariaLabel: "Current condition: on-device shortcuts",
   },
   {
     id: "gesture-triggered",
-    label: "Gesture-triggered shortcuts",
-    ariaLabel: "Current condition: gesture-triggered shortcuts",
   },
 ];
 
@@ -96,69 +90,69 @@ const MAX_SELECTED_SHORTCUTS = 6;
 
 const SHORTCUT_CONTEXTS = {
   得分: {
-    en: "Scoring Point",
+    en: "Point Scored",
     deleteAria: {
       zh: "删除得分情境",
-      en: "Delete Scoring Point context",
+      en: "Delete the Point Scored context",
     },
     customAria: {
       zh: "自定义得分弹幕",
-      en: "Customize Scoring Point danmaku",
+      en: "Customize Danmaku for a Point Scored",
     },
   },
   失分: {
-    en: "Losing Point",
+    en: "Point Lost",
     deleteAria: {
       zh: "删除失分情境",
-      en: "Delete Losing Point context",
+      en: "Delete the Point Lost context",
     },
     customAria: {
       zh: "自定义失分弹幕",
-      en: "Customize Losing Point danmaku",
+      en: "Customize Danmaku for a Point Lost",
     },
   },
   嘲讽: {
-    en: "Opponent's Failure",
+    en: "Opponent Error",
     deleteAria: {
       zh: "删除嘲讽情境",
-      en: "Delete Opponent’s Failure context",
+      en: "Delete the Opponent Error context",
     },
     customAria: {
       zh: "自定义嘲讽弹幕",
-      en: "Customize Opponent’s Failure danmaku",
+      en: "Customize Danmaku for an Opponent Error",
     },
   },
   质疑: {
-    en: "Questionable Call ",
+    en: "Questionable Call",
     deleteAria: {
       zh: "删除质疑情境",
-      en: "Delete Questionable Call context",
+      en: "Delete the Questionable Call context",
     },
     customAria: {
       zh: "自定义质疑弹幕",
-      en: "Customize Questionable Call danmaku",
+      en: "Customize Danmaku for a Questionable Call",
     },
   },
   等待: {
     en: "Waiting for Outcome",
     deleteAria: {
       zh: "删除等待情境",
-      en: "Delete Waiting for Outcome context",
+      en: "Delete the Waiting for Outcome context",
     },
     customAria: {
       zh: "自定义等待弹幕",
-      en: "Customize Waiting for Outcome danmaku",
+      en: "Customize Danmaku While Waiting for the Outcome",
     },
   },
   疑惑: {
     en: "Confusing Moment",
     deleteAria: {
       zh: "删除疑惑情境",
-      en: "Delete Confusing Moment context",
+      en: "Delete the Confusing Moment context",
     },
     customAria: {
       zh: "自定义疑惑弹幕",
-      en: "Customize Confusing Moment danmaku",
+      en: "Customize Danmaku for a Confusing Moment",
     },
   },
 };
@@ -168,7 +162,7 @@ const SHORTCUT_DANMAKU_TRANSLATIONS = {
   牛逼: "Amazing!",
   太棒了: "Let’s go!",
   可惜了: "So close!",
-  稳住: "You got this",
+  稳住: "You've got this!",
   问题不大: "It’s okay",
   差一点: "Unlucky",
   "就这？": "Bruh...",
@@ -181,7 +175,7 @@ const SHORTCUT_DANMAKU_TRANSLATIONS = {
   窒息了: "I can’t breathe",
   加油: "Praying for you!",
   求求了: "BELIEVE!",
-  什么情况: "What happened",
+  什么情况: "What happened?",
   没看清: "Missed it",
   "?": "?",
 };
@@ -197,7 +191,6 @@ const SHORTCUT_I18N = {
     custom: "自定义",
     confirm: "确认",
     dialogDefaultTitle: "添加弹幕",
-    dialogLabel: "弹幕内容",
     dialogPlaceholder: "请输入新的弹幕",
     dialogCancel: "取消",
     dialogSubmit: "添加",
@@ -206,18 +199,17 @@ const SHORTCUT_I18N = {
   en: {
     languageLabel: "English",
     languageAria: "Switch language",
-    setupTitle: "Quick Danmaku Settings",
-    sendTitle: "One-click Danmaku Send",
-    setupHint: "Select up to 6 preferred danmaku, or customize your own quick danmaku. Confirm to enable one-click sending.",
-    sendHint: "The video is ready to play. Click a quick danmaku below to send it instantly.",
+    setupTitle: "Quick Danmaku Setup",
+    sendTitle: "One-click Danmaku",
+    setupHint: "Select up to 6 favorite danmaku comments, or create your own quick danmaku comment. Confirm to enable one-click sending.",
+    sendHint: "The video is ready to play. Click a quick danmaku comment below to send it instantly.",
     custom: "Custom",
     confirm: "Confirm",
-    dialogDefaultTitle: "Add Danmaku",
-    dialogLabel: "Danmaku Text",
-    dialogPlaceholder: "Enter new danmaku",
+    dialogDefaultTitle: "Add a Danmaku Comment",
+    dialogPlaceholder: "Enter a new danmaku comment",
     dialogCancel: "Cancel",
     dialogSubmit: "Add",
-    emptyError: "Please enter danmaku text",
+    emptyError: "Please enter a danmaku comment",
   },
 };
 
@@ -265,16 +257,15 @@ function isOnDeviceShortcutCondition() {
   return currentCondition === "on-device";
 }
 
-function canTypeDanmaku() {
-  return true;
-}
-
 function updateConditionUi() {
   const condition = EXPERIMENT_CONDITIONS[currentConditionIndex];
   currentCondition = condition.id;
   document.body.dataset.condition = condition.id;
-  conditionButton.textContent = `Condition: ${condition.label}`;
-  conditionButton.setAttribute("aria-label", condition.ariaLabel);
+  conditionButtons.forEach((button) => {
+    const isActive = button.dataset.conditionId === condition.id;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
 }
 
 function applyExperimentCondition() {
@@ -298,8 +289,14 @@ function applyExperimentCondition() {
   stopCameraPreview();
 }
 
-function cycleExperimentCondition() {
-  currentConditionIndex = (currentConditionIndex + 1) % EXPERIMENT_CONDITIONS.length;
+function setExperimentCondition(conditionId) {
+  const nextIndex = EXPERIMENT_CONDITIONS.findIndex((condition) => condition.id === conditionId);
+
+  if (nextIndex === -1 || nextIndex === currentConditionIndex) {
+    return;
+  }
+
+  currentConditionIndex = nextIndex;
   applyExperimentCondition();
 }
 
@@ -662,7 +659,7 @@ function updateDanmakuSettings() {
   只要输入内容非空，就允许用户手动发送；弹幕开关只控制屏幕上是否显示弹幕。
 */
 function updateDanmakuSendButton() {
-  danmakuSendButton.disabled = !canTypeDanmaku() || danmakuInput.value.trim() === "";
+  danmakuSendButton.disabled = danmakuInput.value.trim() === "";
 }
 
 /*
@@ -725,10 +722,6 @@ function chooseDanmakuTrack(itemHeight) {
   发送成功后会清空输入框，并重新计算 Send 按钮状态。
 */
 function sendDanmaku() {
-  if (!canTypeDanmaku()) {
-    return;
-  }
-
   const text = danmakuInput.value.trim();
 
   if (!text) {
@@ -809,7 +802,6 @@ function applyShortcutLanguage() {
   shortcutLanguageButton.setAttribute("aria-label", locale.languageAria);
   shortcutConfirmButton.textContent = locale.confirm;
   shortcutDialogTitle.textContent = getShortcutDialogTitle(shortcutAddButton);
-  document.querySelector(".shortcut-dialog-label").textContent = locale.dialogLabel;
   shortcutDialogInput.placeholder = locale.dialogPlaceholder;
   shortcutDialogCancel.textContent = locale.dialogCancel;
   document.querySelector(".shortcut-dialog-confirm").textContent = locale.dialogSubmit;
@@ -1923,7 +1915,11 @@ danmakuSettingsWrapper.addEventListener("mouseleave", () => {
 });
 
 window.addEventListener("resize", updateDanmakuSettings);
-conditionButton.addEventListener("click", cycleExperimentCondition);
+conditionButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setExperimentCondition(button.dataset.conditionId);
+  });
+});
 
 // Toggle danmaku visibility.
 danmakuToggleButton.addEventListener("click", () => {

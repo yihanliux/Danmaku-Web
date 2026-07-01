@@ -4,27 +4,44 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Local Player</title>
-  <link rel="stylesheet" href="style.css?v=20260629-all-typing-enabled">
+  <link rel="stylesheet" href="style.css?v=20260701-english-copy">
 </head>
 <body>
-  <label class="select-button" for="videoInput">
-    Select Video
-    <input
-      id="videoInput"
-      type="file"
-      accept="video/mp4, video/webm, video/ogg, video/*"
-    >
-  </label>
+  <header class="experiment-toolbar" aria-label="Experiment setup controls">
+    <div class="experiment-toolbar-inner">
+      <div class="experiment-toolbar-title">Experiment Setup</div>
+      <div class="experiment-toolbar-actions">
+        <label class="select-button" for="videoInput">
+          Select a Video
+          <input
+            id="videoInput"
+            type="file"
+            accept="video/mp4, video/webm, video/ogg, video/*"
+          >
+        </label>
 
-  <button id="conditionButton" class="condition-button" type="button" aria-label="Current condition: baseline">
-    Condition: Baseline
-  </button>
+        <div class="condition-control" aria-label="Experiment condition">
+          <div class="condition-segmented" role="group" aria-label="Experiment condition">
+            <button class="condition-button is-active" type="button" data-condition-id="baseline" aria-pressed="true">
+              Baseline
+            </button>
+            <button class="condition-button" type="button" data-condition-id="on-device" aria-pressed="false">
+              On-device
+            </button>
+            <button class="condition-button" type="button" data-condition-id="gesture-triggered" aria-pressed="false">
+              Gesture
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
 
   <main class="app">
     <div class="workspace">
       <section class="player" aria-label="Local video player">
         <header class="player-topbar">
-          <div id="videoTitle" class="title-text">Please Select Video</div>
+          <div id="videoTitle" class="title-text">Please Select a Video</div>
         </header>
 
         <div class="screen">
@@ -242,7 +259,6 @@
   <dialog id="shortcutDialog" class="shortcut-dialog" aria-labelledby="shortcutDialogTitle">
     <form id="shortcutDialogForm" class="shortcut-dialog-form" novalidate>
       <h2 id="shortcutDialogTitle" class="shortcut-dialog-title">添加弹幕</h2>
-      <label class="shortcut-dialog-label" for="shortcutDialogInput">弹幕内容</label>
       <input
         id="shortcutDialogInput"
         class="shortcut-dialog-input"
@@ -259,6 +275,6 @@
     </form>
   </dialog>
 
-  <script src="script.js?v=20260629-all-typing-enabled"></script>
+  <script src="script.js?v=20260701-english-copy"></script>
 </body>
 </html>

@@ -19,7 +19,7 @@ body {
   margin: 0;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif;
   color: #ffffff;
-  background: #ffffff;
+  background: #f6f7f8;
 }
 
 /*
@@ -27,22 +27,57 @@ body {
   position: fixed 表示它固定在浏览器窗口左上角，不会跟着播放器布局移动。
   z-index: 10 确保它盖在其他内容上方，避免被播放器挡住。
 */
+.experiment-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  display: inline-flex;
+  padding: 0px 10px 0;
+  background: #f6f7f8;
+}
+
+.experiment-toolbar-inner {
+  width: auto;
+  max-width: calc(100vw - 30px);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 8px 10px;
+  background: #f6f7f8;
+}
+
+.experiment-toolbar-title {
+  color: #18191C;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.experiment-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
 .select-button {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  z-index: 10;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  color: #6b7280;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px solid #D8DADD;
+  border-radius: 6px;
+  color: #36383C;
   background: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -51,8 +86,13 @@ body {
   这样用户能知道它可以点击，但整体仍然保持“不显眼”。
 */
 .select-button:hover {
-  color: #374151;
-  background: #f3f4f6;
+  color: #18191C;
+  background: #F6F7F8;
+}
+
+.select-button:focus-within {
+  outline: 2px solid rgba(0, 174, 236, 0.28);
+  outline-offset: 2px;
 }
 
 /*
@@ -71,9 +111,9 @@ body {
 .app {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-start;
-  padding: 20px 15px;
+  padding: 60px 15px 20px;
 }
 
 /* 左侧播放器和右侧摄像头预览组成一个工作区。 */
@@ -93,9 +133,9 @@ body {
   display: flex;
   flex-direction: column;
   overflow: visible;
-  border: 1px solid #ffffff;
+  border: 1px solid #f6f7f8;
   border-radius: 8px;
-  background: #ffffff;
+  background: #f6f7f8;
 }
 
 /* 顶部区域现在只显示视频标题文本，不再放选择文件按钮。 */
@@ -103,8 +143,8 @@ body {
   display: flex;
   align-items: center;
   padding: 0px 0px;
-  border-bottom: 1px solid #ffffff;
-  background: #ffffff;
+  border-bottom: 1px solid #f6f7f8;
+  background: #f6f7f8;
 }
 
 /*
@@ -129,7 +169,7 @@ body {
   position: relative;
   width: 100%;
   overflow: hidden;
-  background: #ffffff;
+  background: #f6f7f8;
   aspect-ratio: 16 / 9;
 }
 
@@ -167,7 +207,7 @@ body {
   color: #6b7280;
   font-size: 1rem;
   text-align: center;
-  background: #f4f5f7;
+  background: #ffffff;
 }
 
 .placeholder.hidden {
@@ -703,22 +743,20 @@ body {
   display: none;
   width: 100%;
   max-width: 100%;
-  margin-top: 83px;
 }
 
 .shortcuts-panel {
-  width: 100%;
   max-width: 100%;
-  min-height: 300px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   padding: 0;
-  background: #ffffff;
+  background: #f6f7f8;
   color: #111111;
 }
 
 .shortcuts-title-row {
+  order: 2;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -753,20 +791,21 @@ body {
   position: relative;
   z-index: 30;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: flex-start;
+  gap: 10px;
 }
 
 .shortcut-language-button {
-  position: absolute;
-  right: 0;
-  top: 50%;
+  order: 1;
+  align-self: flex-end;
   min-height: 32px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border: 1px solid #E2E4E7;
+  border: 1px solid #ffffff;
   border-radius: 16px;
   color: #36383C;
   background: #ffffff;
@@ -774,7 +813,6 @@ body {
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transform: translateY(-50%);
 }
 
 .shortcut-language-button:hover,
@@ -812,10 +850,9 @@ body {
   min-height: 100px;
   height: auto;
   padding: 14px 10px;
-  border: 1px solid #E9EBEF;
+  border: 1px solid #ffffff;
   border-radius: 8px;
   background: #ffffff;
-  box-shadow: 0 4px 14px rgba(24, 25, 28, 0.06);
   overflow: visible;
 }
 
@@ -892,7 +929,8 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 20px 35px;
+  padding: 20px 24px;
+  overflow: hidden;
 }
 
 .shortcuts-panel.is-shortcut-send-mode .shortcut-card-delete-button {
@@ -902,21 +940,15 @@ body {
 .shortcuts-panel.is-shortcut-send-mode .shortcut-context-actions {
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
   flex-wrap: wrap;
   justify-content: flex-end;
   row-gap: 15px;
 }
 
 .shortcuts-panel.is-shortcut-send-mode .shortcut-button {
-  min-height: 40px;
-  padding: 0 18px;
-  border-radius: 22px;
-  font-size: 20px;
-}
-
-.shortcuts-panel.is-shortcut-send-mode .shortcut-send-icon {
-  width: 20px;
-  height: 20px;
+  flex: 0 1 auto;
+  max-width: 100%;
 }
 
 .shortcut-button {
@@ -1290,8 +1322,16 @@ body {
 
 /* 中等屏幕上的自适应兜底布局；实验固定布局会在文件底部覆盖部分规则。 */
 @media (max-width: 1200px) {
+  .experiment-toolbar {
+    padding: 10px 32px 0;
+  }
+
+  .experiment-toolbar-inner {
+    max-width: calc(100vw - 64px);
+  }
+
   .app {
-    padding: 28px 32px;
+    padding: 8px 32px 28px;
   }
 
   .workspace {
@@ -1342,8 +1382,39 @@ body {
 
 /* 手机宽度下进一步压缩控制栏、标题和弹幕输入区尺寸。 */
 @media (max-width: 640px) {
+  .experiment-toolbar {
+    display: flex;
+    padding: 10px 16px 0;
+  }
+
+  .experiment-toolbar-inner {
+    max-width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .experiment-toolbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .select-button,
+  .condition-control,
+  .condition-segmented {
+    width: 100%;
+  }
+
+  .condition-segmented {
+    justify-content: stretch;
+  }
+
+  .condition-button {
+    flex: 1 1 0;
+  }
+
   .app {
-    padding: 16px;
+    padding: 8px 16px 16px;
   }
 
   .workspace {
@@ -1431,34 +1502,60 @@ body {
   video 和 camera 不再根据屏幕宽度缩放；如果显示器宽度不够，页面横向滚动。
   这组规则放在媒体查询之后，目的是让实验采集时优先保持固定尺寸。
 */
+.condition-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.condition-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid #E3E5E7;
+  border-radius: 8px;
+  background: #F1F2F3;
+}
+
 .condition-button {
-  position: fixed;
-  top: 10px;
-  left: 120px;
-  z-index: 10;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 26px;
-  max-width: calc(100vw - 140px);
   padding: 0 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  color: #111827;
-  background: #ffffff;
-  font-size: 12px;
+  border: 0;
+  border-radius: 6px;
+  color: #61666D;
+  background: transparent;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
 }
 
+.condition-button.is-active {
+  color: #18191C;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(24, 25, 28, 0.12);
+}
+
 .condition-button:hover {
-  background: #f3f4f6;
+  color: #18191C;
 }
 
 .condition-button:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid #00AEEC;
   outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .condition-control {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
 }
 
 .app {
@@ -1512,14 +1609,14 @@ body {
   width: 330px;
 }
 
-.camera-column,
-.shortcuts-column {
+.camera-column {
   width: 440px;
   margin-top: 83px;
 }
 
 .shortcuts-column {
-  margin-top: 30px;
+  width: 440px;
+  margin-top: -20px;
 }
 
 .camera-panel {
@@ -1546,8 +1643,13 @@ body[data-condition="on-device"] .shortcuts-column {
 
 .shortcuts-panel {
   width: 100%;
-  height: 675px;
+  height: 850px;
   min-height: 0;
+  padding-right: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .player:fullscreen {
@@ -1579,7 +1681,7 @@ body[data-condition="on-device"] .shortcuts-column {
 .player:fullscreen .player-controls {
   flex: 0 0 auto;
   padding: 12px 0;
-  background: #ffffff;
+  background: #f6f7f8;
 }
 
 .shortcut-dialog {
@@ -1608,12 +1710,6 @@ body[data-condition="on-device"] .shortcuts-column {
   font-size: 20px;
   font-weight: 600;
   line-height: 1.35;
-}
-
-.shortcut-dialog-label {
-  color: #55585D;
-  font-size: 14px;
-  font-weight: 500;
 }
 
 .shortcut-dialog-input {
