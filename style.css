@@ -73,7 +73,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 40px 24px;
+  padding: 20px 15px;
 }
 
 /* 左侧播放器和右侧摄像头预览组成一个工作区。 */
