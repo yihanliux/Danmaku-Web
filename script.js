@@ -23,7 +23,6 @@ const playIcon = document.getElementById("playIcon");
 const progressBar = document.getElementById("progressBar");
 const timeDisplay = document.getElementById("timeDisplay");
 const fullscreenButton = document.getElementById("fullscreenButton");
-const voiceButton = document.getElementById("voiceButton");
 const volumeWrapper = document.querySelector(".volume-wrapper");
 const volumePanel = document.getElementById("volumePanel");
 const volumeBar = document.getElementById("volumeBar");
@@ -54,13 +53,11 @@ const danmakuInput = document.getElementById("danmakuInput");
 const danmakuSendButton = document.getElementById("danmakuSendButton");
 const shortcutsButtons = document.querySelector(".shortcuts-buttons");
 const shortcutsPanel = document.querySelector(".shortcuts-panel");
-const shortcutManageButton = document.getElementById("shortcutManageButton");
-const shortcutManageIcon = document.getElementById("shortcutManageIcon");
-const shortcutManageMenu = document.getElementById("shortcutManageMenu");
-const shortcutManageWrapper = document.querySelector(".shortcut-manage-wrapper");
 const shortcutTitle = document.querySelector(".shortcuts-title");
 const shortcutSetupHint = document.getElementById("shortcutSetupHint");
 const shortcutConfirmButton = document.getElementById("shortcutConfirmButton");
+const shortcutLanguageButton = document.getElementById("shortcutLanguageButton");
+const shortcutLanguageText = document.getElementById("shortcutLanguageText");
 const shortcutDialog = document.getElementById("shortcutDialog");
 const shortcutDialogForm = document.getElementById("shortcutDialogForm");
 const shortcutDialogTitle = document.getElementById("shortcutDialogTitle");
@@ -95,13 +92,134 @@ const SHORTCUT_GROUP_SEND_ICONS = {
   I: "src/Send_I.png",
 };
 
-const SHORTCUT_GROUP_DELETE_ICONS = {
-  P: "src/delete_P.png",
-  N: "src/delete_N.png",
-  I: "src/delete_I.png",
+const MAX_SELECTED_SHORTCUTS = 6;
+
+const SHORTCUT_CONTEXTS = {
+  得分: {
+    en: "Scoring Point",
+    deleteAria: {
+      zh: "删除得分情境",
+      en: "Delete Scoring Point context",
+    },
+    customAria: {
+      zh: "自定义得分弹幕",
+      en: "Customize Scoring Point danmaku",
+    },
+  },
+  失分: {
+    en: "Losing Point",
+    deleteAria: {
+      zh: "删除失分情境",
+      en: "Delete Losing Point context",
+    },
+    customAria: {
+      zh: "自定义失分弹幕",
+      en: "Customize Losing Point danmaku",
+    },
+  },
+  嘲讽: {
+    en: "Opponent's Failure",
+    deleteAria: {
+      zh: "删除嘲讽情境",
+      en: "Delete Opponent’s Failure context",
+    },
+    customAria: {
+      zh: "自定义嘲讽弹幕",
+      en: "Customize Opponent’s Failure danmaku",
+    },
+  },
+  质疑: {
+    en: "Questionable Call ",
+    deleteAria: {
+      zh: "删除质疑情境",
+      en: "Delete Questionable Call context",
+    },
+    customAria: {
+      zh: "自定义质疑弹幕",
+      en: "Customize Questionable Call danmaku",
+    },
+  },
+  等待: {
+    en: "Waiting for Outcome",
+    deleteAria: {
+      zh: "删除等待情境",
+      en: "Delete Waiting for Outcome context",
+    },
+    customAria: {
+      zh: "自定义等待弹幕",
+      en: "Customize Waiting for Outcome danmaku",
+    },
+  },
+  疑惑: {
+    en: "Confusing Moment",
+    deleteAria: {
+      zh: "删除疑惑情境",
+      en: "Delete Confusing Moment context",
+    },
+    customAria: {
+      zh: "自定义疑惑弹幕",
+      en: "Customize Confusing Moment danmaku",
+    },
+  },
 };
 
-const defaultShortcutsMarkup = shortcutsButtons.innerHTML;
+const SHORTCUT_DANMAKU_TRANSLATIONS = {
+  精彩: "Nice shot!",
+  牛逼: "Amazing!",
+  太棒了: "Let’s go!",
+  可惜了: "So close!",
+  稳住: "You got this",
+  问题不大: "It’s okay",
+  差一点: "Unlucky",
+  "就这？": "Bruh...",
+  拉完了: "Booooo!",
+  幽默: "Is that it?",
+  "啊？": "Huh?",
+  裁判拉完了: "No way!!!",
+  离谱: "Rigged!",
+  紧张: "I’m so nervous",
+  窒息了: "I can’t breathe",
+  加油: "Praying for you!",
+  求求了: "BELIEVE!",
+  什么情况: "What happened",
+  没看清: "Missed it",
+  "?": "?",
+};
+
+const SHORTCUT_I18N = {
+  zh: {
+    languageLabel: "中文-简体",
+    languageAria: "切换语言",
+    setupTitle: "快捷弹幕设置",
+    sendTitle: "弹幕一键发送",
+    setupHint: "请选择最多 6 条偏好的弹幕，或自定义弹幕作为快捷弹幕。确认后即可一键发送。",
+    sendHint: "视频已可播放。点击下方快捷弹幕，即可一键发送对应弹幕。",
+    custom: "自定义",
+    confirm: "确认",
+    dialogDefaultTitle: "添加弹幕",
+    dialogLabel: "弹幕内容",
+    dialogPlaceholder: "请输入新的弹幕",
+    dialogCancel: "取消",
+    dialogSubmit: "添加",
+    emptyError: "请输入弹幕内容",
+  },
+  en: {
+    languageLabel: "English",
+    languageAria: "Switch language",
+    setupTitle: "Quick Danmaku Settings",
+    sendTitle: "One-click Danmaku Send",
+    setupHint: "Select up to 6 preferred danmaku, or customize your own quick danmaku. Confirm to enable one-click sending.",
+    sendHint: "The video is ready to play. Click a quick danmaku below to send it instantly.",
+    custom: "Custom",
+    confirm: "Confirm",
+    dialogDefaultTitle: "Add Danmaku",
+    dialogLabel: "Danmaku Text",
+    dialogPlaceholder: "Enter new danmaku",
+    dialogCancel: "Cancel",
+    dialogSubmit: "Add",
+    emptyError: "Please enter danmaku text",
+  },
+};
 
 /*
   页面运行状态。
@@ -121,8 +239,8 @@ let currentCondition = EXPERIMENT_CONDITIONS[currentConditionIndex].id;
 let cameraStream = null;
 let gestureTimer = null;
 let shortcutAddButton = null;
-let isShortcutDeleteMode = false;
 let isShortcutSetupMode = true;
+let currentShortcutLanguage = "zh";
 let isGestureRequestRunning = false;
 let currentHeldGesture = null;
 let currentHeldGestureStartedAt = 0;
@@ -143,6 +261,10 @@ function isGestureTriggeredCondition() {
   return currentCondition === "gesture-triggered";
 }
 
+function isOnDeviceShortcutCondition() {
+  return currentCondition === "on-device";
+}
+
 function canTypeDanmaku() {
   return true;
 }
@@ -161,6 +283,11 @@ function applyExperimentCondition() {
   isDanmakuEnabled = true;
 
   updateDanmakuControls();
+  updatePlaybackAvailability();
+
+  if (!canStartVideoPlayback() && !videoPlayer.paused) {
+    videoPlayer.pause();
+  }
 
   if (isGestureTriggeredCondition()) {
     startCameraPreview();
@@ -255,7 +382,7 @@ function hasSelectedVideo() {
 }
 
 function canStartVideoPlayback() {
-  return hasSelectedVideo() && !isShortcutSetupMode;
+  return hasSelectedVideo() && (!isOnDeviceShortcutCondition() || !isShortcutSetupMode);
 }
 
 function updatePlaybackAvailability() {
@@ -646,39 +773,135 @@ function getShortcutRows() {
   return Array.from(shortcutsButtons.querySelectorAll(".shortcut-context-row"));
 }
 
+function getShortcutLocale() {
+  return SHORTCUT_I18N[currentShortcutLanguage];
+}
+
+function getShortcutButtonOriginalText(button) {
+  if (!button.dataset.shortcutOriginalText) {
+    button.dataset.shortcutOriginalText = button.dataset.danmakuText || button.textContent.trim();
+  }
+
+  return button.dataset.shortcutOriginalText;
+}
+
+function updateShortcutButtonText(button, text) {
+  button.dataset.danmakuText = text;
+  button.querySelectorAll(".shortcut-default-text").forEach((element) => {
+    element.textContent = text;
+  });
+  button.querySelectorAll(".shortcut-hover-content span").forEach((element) => {
+    element.textContent = text;
+  });
+}
+
+function getShortcutDialogTitle(addButton) {
+  if (addButton) {
+    return addButton.getAttribute("aria-label") || getShortcutLocale().dialogDefaultTitle;
+  }
+
+  return getShortcutLocale().dialogDefaultTitle;
+}
+
+function applyShortcutLanguage() {
+  const locale = getShortcutLocale();
+  shortcutLanguageText.textContent = locale.languageLabel;
+  shortcutLanguageButton.setAttribute("aria-label", locale.languageAria);
+  shortcutConfirmButton.textContent = locale.confirm;
+  shortcutDialogTitle.textContent = getShortcutDialogTitle(shortcutAddButton);
+  document.querySelector(".shortcut-dialog-label").textContent = locale.dialogLabel;
+  shortcutDialogInput.placeholder = locale.dialogPlaceholder;
+  shortcutDialogCancel.textContent = locale.dialogCancel;
+  document.querySelector(".shortcut-dialog-confirm").textContent = locale.dialogSubmit;
+
+  getShortcutRows().forEach((row) => {
+    const label = row.querySelector(".shortcut-context-label");
+    const contextKey = label?.dataset.shortcutContext || label?.textContent.trim();
+    const context = SHORTCUT_CONTEXTS[contextKey];
+
+    if (label && context) {
+      label.dataset.shortcutContext = contextKey;
+      const icon = label.querySelector(".shortcut-context-icon");
+      label.textContent = "";
+
+      if (icon) {
+        label.append(icon);
+      }
+
+      label.append(currentShortcutLanguage === "zh" ? contextKey : context.en);
+      row.querySelector(".shortcut-card-delete-button")?.setAttribute(
+        "aria-label",
+        context.deleteAria[currentShortcutLanguage],
+      );
+      row.querySelector(".shortcut-add-button")?.setAttribute(
+        "aria-label",
+        context.customAria[currentShortcutLanguage],
+      );
+    }
+  });
+
+  shortcutsButtons.querySelectorAll(".shortcut-add-button span").forEach((element) => {
+    element.textContent = locale.custom;
+  });
+
+  shortcutsButtons.querySelectorAll(".shortcut-button").forEach((button) => {
+    if (button.dataset.shortcutCustom === "true") {
+      return;
+    }
+
+    const originalText = getShortcutButtonOriginalText(button);
+    updateShortcutButtonText(
+      button,
+      currentShortcutLanguage === "zh"
+        ? originalText
+        : SHORTCUT_DANMAKU_TRANSLATIONS[originalText] || originalText,
+    );
+  });
+
+  updateShortcutSetupUi();
+}
+
+function toggleShortcutLanguage() {
+  currentShortcutLanguage = currentShortcutLanguage === "zh" ? "en" : "zh";
+  applyShortcutLanguage();
+}
+
+function getSelectedShortcutCount() {
+  return shortcutsButtons.querySelectorAll(".shortcut-button.is-shortcut-selected").length;
+}
+
 function updateShortcutSetupUi() {
+  const locale = getShortcutLocale();
   shortcutsPanel.classList.toggle("is-shortcut-setup-mode", isShortcutSetupMode);
   shortcutsPanel.classList.toggle("is-shortcut-send-mode", !isShortcutSetupMode);
-  shortcutTitle.textContent = isShortcutSetupMode ? "快捷弹幕设置" : "弹幕一键发送";
-  shortcutSetupHint.textContent = isShortcutSetupMode
-    ? "请为每个情境选择一条偏好的弹幕，或自定义一条作为快捷弹幕。"
-    : "视频已可播放。点击下方快捷弹幕，即可一键发送对应弹幕。";
+  shortcutTitle.textContent = isShortcutSetupMode ? locale.setupTitle : locale.sendTitle;
+  shortcutSetupHint.textContent = isShortcutSetupMode ? locale.setupHint : locale.sendHint;
   shortcutSetupHint.classList.remove("hidden");
   shortcutConfirmButton.classList.toggle("hidden", !isShortcutSetupMode);
-  shortcutManageWrapper.classList.add("hidden");
 
   if (!isShortcutSetupMode) {
     return;
   }
 
   const rows = getShortcutRows();
-  const isComplete = rows.length > 0
-    && rows.every((row) => row.querySelector(".shortcut-button.is-shortcut-selected"));
+  const selectedCount = getSelectedShortcutCount();
+  const isComplete = rows.length > 0 && selectedCount > 0 && selectedCount <= MAX_SELECTED_SHORTCUTS;
   shortcutConfirmButton.disabled = !isComplete;
 }
 
 function selectShortcutButton(button) {
-  const row = button.closest(".shortcut-context-row");
-
-  if (!row) {
+  if (!button) {
     return;
   }
 
-  row.querySelectorAll(".shortcut-button").forEach((rowButton) => {
-    const isSelected = rowButton === button;
-    rowButton.classList.toggle("is-shortcut-selected", isSelected);
-    rowButton.setAttribute("aria-pressed", String(isSelected));
-  });
+  const isSelected = button.classList.contains("is-shortcut-selected");
+
+  if (!isSelected && getSelectedShortcutCount() >= MAX_SELECTED_SHORTCUTS) {
+    return;
+  }
+
+  button.classList.toggle("is-shortcut-selected", !isSelected);
+  button.setAttribute("aria-pressed", String(!isSelected));
 
   updateShortcutSetupUi();
 }
@@ -689,6 +912,13 @@ function confirmShortcutSetup() {
   }
 
   getShortcutRows().forEach((row) => {
+    const hasSelectedShortcut = Boolean(row.querySelector(".shortcut-button.is-shortcut-selected"));
+
+    if (!hasSelectedShortcut) {
+      row.remove();
+      return;
+    }
+
     row.querySelectorAll(".shortcut-button").forEach((button) => {
       if (!button.classList.contains("is-shortcut-selected")) {
         button.remove();
@@ -700,10 +930,10 @@ function confirmShortcutSetup() {
     });
 
     row.querySelector(".shortcut-add-button")?.remove();
+    row.querySelector(".shortcut-card-delete-button")?.remove();
   });
 
   isShortcutSetupMode = false;
-  setShortcutDeleteMode(false);
   updateShortcutSetupUi();
   updatePlaybackAvailability();
 }
@@ -712,7 +942,7 @@ function getShortcutGroupClassSuffix(group) {
   return String(group || "").toLowerCase();
 }
 
-function createShortcutButton(text, group = "P") {
+function createShortcutButton(text, group = "P", options = {}) {
   const normalizedGroup = SHORTCUT_GROUP_SEND_ICONS[group] ? group : "P";
   const button = document.createElement("button");
   button.className = `shortcut-button shortcut-button-${getShortcutGroupClassSuffix(normalizedGroup)}`;
@@ -720,6 +950,10 @@ function createShortcutButton(text, group = "P") {
   button.dataset.shortcutGroup = normalizedGroup;
   button.dataset.danmakuText = text;
   button.setAttribute("aria-pressed", "false");
+
+  if (options.isCustom) {
+    button.dataset.shortcutCustom = "true";
+  }
 
   const defaultText = document.createElement("span");
   defaultText.className = "shortcut-default-text";
@@ -744,7 +978,7 @@ function createShortcutButton(text, group = "P") {
 
 function addTemporaryShortcutButton(addButton) {
   shortcutAddButton = addButton;
-  shortcutDialogTitle.textContent = addButton.getAttribute("aria-label") || "添加弹幕";
+  shortcutDialogTitle.textContent = getShortcutDialogTitle(addButton);
   shortcutDialogInput.value = "";
   shortcutDialogError.textContent = "";
   shortcutDialog.showModal();
@@ -764,7 +998,7 @@ function submitShortcutDialog(event) {
   const trimmedText = shortcutDialogInput.value.trim();
 
   if (!trimmedText) {
-    shortcutDialogError.textContent = "\u8bf7\u8f93\u5165\u5f39\u5e55\u5185\u5bb9";
+    shortcutDialogError.textContent = getShortcutLocale().emptyError;
     shortcutDialogInput.focus();
     return;
   }
@@ -772,15 +1006,14 @@ function submitShortcutDialog(event) {
   if (shortcutAddButton) {
     const row = shortcutAddButton.closest(".shortcut-context-row");
     const group = shortcutAddButton.dataset.shortcutGroup || row?.dataset.shortcutGroup || "P";
-    const newButton = createShortcutButton(trimmedText, group);
+    row?.querySelectorAll('.shortcut-button[data-shortcut-custom="true"]').forEach((button) => {
+      button.remove();
+    });
+
+    const newButton = createShortcutButton(trimmedText, group, { isCustom: true });
     shortcutAddButton.before(newButton);
 
     if (isShortcutSetupMode) {
-      row.querySelectorAll(".shortcut-button").forEach((button) => {
-        if (button !== newButton) {
-          button.remove();
-        }
-      });
       selectShortcutButton(newButton);
     }
   }
@@ -788,78 +1021,16 @@ function submitShortcutDialog(event) {
   closeShortcutDialog();
 }
 
-function addShortcutDeleteIcons() {
-  shortcutsButtons.querySelectorAll(".shortcut-button").forEach((button) => {
-    if (button.querySelector(".shortcut-delete-icon")) {
-      return;
-    }
-
-    const group = button.dataset.shortcutGroup || "P";
-    const icon = document.createElement("img");
-    icon.className = "shortcut-delete-icon";
-    icon.src = SHORTCUT_GROUP_DELETE_ICONS[group] || SHORTCUT_GROUP_DELETE_ICONS.P;
-    icon.alt = "";
-    icon.setAttribute("aria-hidden", "true");
-    button.append(icon);
-  });
-}
-
-function setShortcutDeleteMode(isActive) {
-  isShortcutDeleteMode = isActive;
-  shortcutsPanel.classList.toggle("is-shortcut-delete-mode", isActive);
-  shortcutManageMenu.classList.add("hidden");
-  shortcutManageButton.setAttribute("aria-expanded", "false");
-  shortcutManageButton.setAttribute("aria-label", isActive ? "完成编辑" : "管理快捷弹幕");
-  shortcutManageIcon.src = isActive ? "src/finish.png" : "src/menu.png";
-
-  if (isActive) {
-    addShortcutDeleteIcons();
-  }
-}
-
-function restoreDefaultShortcuts() {
-  shortcutsButtons.innerHTML = defaultShortcutsMarkup;
-  setShortcutDeleteMode(false);
-  updateShortcutSetupUi();
-}
-
-function handleShortcutManageButtonClick() {
-  if (isShortcutDeleteMode) {
-    setShortcutDeleteMode(false);
-    return;
-  }
-
-  const isMenuOpen = !shortcutManageMenu.classList.contains("hidden");
-  shortcutManageMenu.classList.toggle("hidden", isMenuOpen);
-  shortcutManageButton.setAttribute("aria-expanded", String(!isMenuOpen));
-}
-
-function handleShortcutManageMenuClick(event) {
-  const menuItem = event.target.closest("[data-shortcut-menu-action]");
-
-  if (!menuItem) {
-    return;
-  }
-
-  if (menuItem.dataset.shortcutMenuAction === "delete") {
-    setShortcutDeleteMode(true);
-    return;
-  }
-
-  if (menuItem.dataset.shortcutMenuAction === "restore") {
-    restoreDefaultShortcuts();
-  }
-}
-
 function handleShortcutButtonsClick(event) {
-  const shortcutButton = event.target.closest(".shortcut-button");
+  const deleteCardButton = event.target.closest(".shortcut-card-delete-button");
 
-  if (isShortcutDeleteMode) {
-    if (shortcutButton && shortcutsButtons.contains(shortcutButton)) {
-      shortcutButton.remove();
-    }
+  if (isShortcutSetupMode && deleteCardButton && shortcutsButtons.contains(deleteCardButton)) {
+    deleteCardButton.closest(".shortcut-context-row")?.remove();
+    updateShortcutSetupUi();
     return;
   }
+
+  const shortcutButton = event.target.closest(".shortcut-button");
 
   const addButton = event.target.closest(".shortcut-add-button");
 
@@ -1760,22 +1931,6 @@ danmakuToggleButton.addEventListener("click", () => {
   updateDanmakuControls();
 });
 
-/*
-
-// 点击弹幕开关按钮时，切换是否显示弹幕。
-danmakuToggleButton.addEventListener("click", () => {
-  isDanmakuEnabled = !isDanmakuEnabled;
-  updateDanmakuControls();
-});
-
-// 在弹幕输入框里按 Enter 也可以发送弹幕。
-danmakuInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    sendDanmaku();
-  }
-});
-
-*/
 danmakuInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     sendDanmaku();
@@ -1816,14 +1971,7 @@ danmakuSendButton.addEventListener("click", sendDanmaku);
 
 shortcutsButtons.addEventListener("click", handleShortcutButtonsClick);
 shortcutConfirmButton.addEventListener("click", confirmShortcutSetup);
-shortcutManageButton.addEventListener("click", handleShortcutManageButtonClick);
-shortcutManageMenu.addEventListener("click", handleShortcutManageMenuClick);
-document.addEventListener("click", (event) => {
-  if (!shortcutManageWrapper.contains(event.target)) {
-    shortcutManageMenu.classList.add("hidden");
-    shortcutManageButton.setAttribute("aria-expanded", "false");
-  }
-});
+shortcutLanguageButton.addEventListener("click", toggleShortcutLanguage);
 shortcutDialogForm.addEventListener("submit", submitShortcutDialog);
 shortcutDialogCancel.addEventListener("click", closeShortcutDialog);
 shortcutDialog.addEventListener("cancel", () => {
@@ -1846,7 +1994,5 @@ resetControls();
 updateDanmakuControls();
 initializeDanmakuSettingsFromCss();
 updateDanmakuAnimationState();
-updateShortcutSetupUi();
+applyShortcutLanguage();
 applyExperimentCondition();
-
-// 页面打开后立即尝试启动右侧摄像头预览。

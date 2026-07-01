@@ -757,74 +757,41 @@ body {
   justify-content: flex-start;
 }
 
-.shortcut-manage-wrapper {
+.shortcut-language-button {
   position: absolute;
-  z-index: 31;
   right: 0;
   top: 50%;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #E2E4E7;
+  border-radius: 16px;
+  color: #36383C;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
   transform: translateY(-50%);
 }
 
-.shortcut-manage-button {
-  width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
+.shortcut-language-button:hover,
+.shortcut-language-button:focus-visible {
+  background: #F6F7F8;
 }
 
-.shortcut-manage-button:hover,
-.shortcut-manage-button:focus-visible {
-  background: #F1F2F3;
-}
-
-.shortcut-manage-button:focus-visible {
+.shortcut-language-button:focus-visible {
   outline: 2px solid #00AEEC;
   outline-offset: 2px;
 }
 
-.shortcut-manage-icon {
-  width: 20px;
-  height: 20px;
+.shortcut-language-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
   object-fit: contain;
-}
-
-.shortcut-manage-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  z-index: 100;
-  min-width: 148px;
-  padding: 4px;
-  border: 1px solid #E2E4E7;
-  border-radius: 6px;
-  background: #ffffff;
-  box-shadow: 0 8px 24px rgba(24, 25, 28, 0.16);
-}
-
-.shortcut-manage-menu button {
-  width: 100%;
-  height: 34px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 4px;
-  color: #36383C;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.shortcut-manage-menu button:hover,
-.shortcut-manage-menu button:focus-visible {
-  background: #F1F2F3;
-  outline: none;
 }
 
 .shortcuts-buttons {
@@ -835,20 +802,54 @@ body {
 }
 
 .shortcut-context-row {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 14px;
   align-items: stretch;
   justify-content: center;
-  height: 100px;
-  padding: 0px 10px;
+  min-height: 100px;
+  height: auto;
+  padding: 14px 10px;
   border: 1px solid #E9EBEF;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 4px 14px rgba(24, 25, 28, 0.06);
-  overflow: hidden;
-  overflow-y: hidden;
+  overflow: visible;
+}
+
+.shortcut-card-delete-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.shortcut-card-delete-button:hover,
+.shortcut-card-delete-button:focus-visible {
+  background: #F1F2F3;
+  outline: none;
+}
+
+.shortcut-card-delete-button:focus-visible {
+  outline: 2px solid #00AEEC;
+  outline-offset: 2px;
+}
+
+.shortcut-card-delete-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 .shortcut-context-label {
@@ -883,23 +884,32 @@ body {
 }
 
 .shortcuts-panel.is-shortcut-send-mode .shortcut-context-row {
-  height: 80px;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 80px;
+  height: auto;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 35px;
+  gap: 20px;
+  padding: 20px 35px;
+}
+
+.shortcuts-panel.is-shortcut-send-mode .shortcut-card-delete-button {
+  display: none;
 }
 
 .shortcuts-panel.is-shortcut-send-mode .shortcut-context-actions {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  row-gap: 15px;
 }
 
 .shortcuts-panel.is-shortcut-send-mode .shortcut-button {
   min-height: 40px;
-  padding: 25 18px;
+  padding: 0 18px;
   border-radius: 22px;
   font-size: 20px;
 }
@@ -992,35 +1002,6 @@ body {
 .shortcut-button.is-shortcut-selected {
   border-color: #00AEEC;
   box-shadow: 0 0 0 3px rgba(0, 174, 236, 0.16);
-}
-
-.shortcut-delete-icon {
-  display: none;
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-}
-
-.shortcuts-panel.is-shortcut-delete-mode .shortcut-delete-icon {
-  display: block;
-}
-
-.shortcuts-panel.is-shortcut-delete-mode .shortcut-add-button {
-  display: none;
-}
-
-.shortcuts-panel.is-shortcut-delete-mode .shortcut-button {
-  gap: 8px;
-}
-
-.shortcuts-panel.is-shortcut-delete-mode .shortcut-default-text {
-  position: static;
-  transform: none;
-  opacity: 1;
-}
-
-.shortcuts-panel.is-shortcut-delete-mode .shortcut-hover-content {
-  display: none;
 }
 
 .shortcut-button-p {

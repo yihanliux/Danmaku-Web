@@ -143,21 +143,17 @@
               <img class="shortcuts-title-icon" src="src/Danmaku.png" alt="">
               <h2 class="shortcuts-title">弹幕一键发送</h2>
             </div>
-            <div class="shortcut-manage-wrapper">
-              <button id="shortcutManageButton" class="shortcut-manage-button" type="button" aria-label="管理快捷弹幕" aria-expanded="false">
-                <img id="shortcutManageIcon" class="shortcut-manage-icon" src="src/menu.png" alt="">
-              </button>
-              <div id="shortcutManageMenu" class="shortcut-manage-menu hidden" role="menu">
-                <button type="button" role="menuitem" data-shortcut-menu-action="delete">删除快捷弹幕</button>
-                <button type="button" role="menuitem" data-shortcut-menu-action="restore">恢复默认</button>
-              </div>
-            </div>
+            <button id="shortcutLanguageButton" class="shortcut-language-button" type="button" aria-label="切换语言">
+              <img class="shortcut-language-icon" src="src/language.png" alt="">
+              <span id="shortcutLanguageText">中文-简体</span>
+            </button>
           </div>
           <p id="shortcutSetupHint" class="shortcut-setup-hint">
-            请为每个情境选择一条偏好的弹幕，或自定义一条作为快捷弹幕。
+            请选择最多 6 条偏好的弹幕，或自定义弹幕作为快捷弹幕。确认后即可一键发送。
           </p>
           <div class="shortcuts-buttons" aria-label="Shortcut buttons">
             <div class="shortcut-context-row shortcut-context-row-p" data-shortcut-group="P">
+              <button class="shortcut-card-delete-button" type="button" aria-label="删除得分情境"><img class="shortcut-card-delete-icon" src="src/delete.png" alt=""></button>
               <span class="shortcut-context-label"><img class="shortcut-context-icon" src="src/得分.png" alt="">得分</span>
               <div class="shortcut-context-actions">
               <button class="shortcut-button shortcut-button-p" type="button" data-shortcut-group="P" data-danmaku-text="精彩"><span class="shortcut-default-text">精彩</span><span class="shortcut-hover-content" aria-hidden="true"><span>精彩</span><img class="shortcut-send-icon" src="src/Send_P.png" alt=""></span></button>
@@ -168,6 +164,7 @@
             </div>
 
             <div class="shortcut-context-row shortcut-context-row-n" data-shortcut-group="N">
+              <button class="shortcut-card-delete-button" type="button" aria-label="删除失分情境"><img class="shortcut-card-delete-icon" src="src/delete.png" alt=""></button>
               <span class="shortcut-context-label"><img class="shortcut-context-icon" src="src/失分.png" alt="">失分</span>
               <div class="shortcut-context-actions">
               <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="可惜了"><span class="shortcut-default-text">可惜了</span><span class="shortcut-hover-content" aria-hidden="true"><span>可惜了</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
@@ -179,6 +176,7 @@
             </div>
 
             <div class="shortcut-context-row shortcut-context-row-n" data-shortcut-group="N">
+              <button class="shortcut-card-delete-button" type="button" aria-label="删除嘲讽情境"><img class="shortcut-card-delete-icon" src="src/delete.png" alt=""></button>
               <span class="shortcut-context-label"><img class="shortcut-context-icon" src="src/嘲讽.png" alt="">嘲讽</span>
               <div class="shortcut-context-actions">
               <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="就这？"><span class="shortcut-default-text">就这？</span><span class="shortcut-hover-content" aria-hidden="true"><span>就这？</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
@@ -189,6 +187,7 @@
             </div>
 
             <div class="shortcut-context-row shortcut-context-row-n" data-shortcut-group="N">
+              <button class="shortcut-card-delete-button" type="button" aria-label="删除质疑情境"><img class="shortcut-card-delete-icon" src="src/delete.png" alt=""></button>
               <span class="shortcut-context-label"><img class="shortcut-context-icon" src="src/质疑.png" alt="">质疑</span>
               <div class="shortcut-context-actions">
               <button class="shortcut-button shortcut-button-n" type="button" data-shortcut-group="N" data-danmaku-text="啊？"><span class="shortcut-default-text">啊？</span><span class="shortcut-hover-content" aria-hidden="true"><span>啊？</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
@@ -199,6 +198,7 @@
             </div>
 
             <div class="shortcut-context-row shortcut-context-row-i" data-shortcut-group="I">
+              <button class="shortcut-card-delete-button" type="button" aria-label="删除等待情境"><img class="shortcut-card-delete-icon" src="src/delete.png" alt=""></button>
               <span class="shortcut-context-label"><img class="shortcut-context-icon" src="src/等待.png" alt="">等待</span>
               <div class="shortcut-context-actions">
               <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="紧张"><span class="shortcut-default-text">紧张</span><span class="shortcut-hover-content" aria-hidden="true"><span>紧张</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
@@ -210,6 +210,7 @@
             </div>
 
             <div class="shortcut-context-row shortcut-context-row-i" data-shortcut-group="I">
+              <button class="shortcut-card-delete-button" type="button" aria-label="删除疑惑情境"><img class="shortcut-card-delete-icon" src="src/delete.png" alt=""></button>
               <span class="shortcut-context-label"><img class="shortcut-context-icon" src="src/疑惑.png" alt="">疑惑</span>
               <div class="shortcut-context-actions">
               <button class="shortcut-button shortcut-button-i" type="button" data-shortcut-group="I" data-danmaku-text="什么情况"><span class="shortcut-default-text">什么情况</span><span class="shortcut-hover-content" aria-hidden="true"><span>什么情况</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
@@ -246,7 +247,6 @@
         id="shortcutDialogInput"
         class="shortcut-dialog-input"
         type="text"
-        maxlength="30"
         autocomplete="off"
         placeholder="请输入新的弹幕"
         required
