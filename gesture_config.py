@@ -9,7 +9,13 @@
 
 
 # 同一个动作发送弹幕后，需要等待多少秒才允许再次发送。
-SAME_GESTURE_COOLDOWN_SECONDS = 10
+SAME_GESTURE_COOLDOWN_SECONDS = 8
+
+GESTURE_COOLDOWN_SECONDS = {
+    "Head Shaking": 8,
+    "Covering Mouth": 8,
+    "Touching Chin": 8,
+}
 
 
 # 动作识别总开关。
@@ -20,14 +26,14 @@ GESTURE_ENABLED = {
     "Raising One Fist": True,
     "Thumbs-Up": False,
     "Thumbs-Down": True,
-    "Three-Point Gesture": True,
+    "Three-Point Gesture": False,
     "Raising Both Fists": False,
     "Pressing Both Hands Downward": False,
     "Opening Both Palms Upward": True,
     "Pressing Palms Together": True,
     "Clasping Hands": True,
     "Head Tilting": False,
-    "Hands On Head": True,
+    "Hands On Head": False,
     "Touching Hair": False,
     "Covering Face": False,
     "Covering Mouth": True,
@@ -63,22 +69,23 @@ GESTURE_DANMAKU_TEXT = {
 # 没有写在这里的动作默认不需要维持，识别到后即可发送。
 # 这个配置由前端执行：后端只返回规则，前端负责计时和冷却判断。
 GESTURE_HOLD_SECONDS = {
-    "Raising One Fist": 0.5,
-    "Thumbs-Up": 0.5,
+    "Raising One Fist": 0.7,
     "Thumbs-Down": 0.5,
+    "Opening Both Palms Upward": 0.5,
+    "Pressing Palms Together": 0.5,
+    "Clasping Hands": 0.5,
+    "Covering Mouth": 1,
+    "Touching Chin": 1,
+    "Head Shaking": 0,
+
+    "Thumbs-Up": 0.5,
     "Three-Point Gesture": 0.5,
     "Raising Both Fists": 0.5,
     "Pressing Both Hands Downward": 0.05,
-    "Opening Both Palms Upward": 0.05,
-    "Pressing Palms Together": 0.05,
-    "Clasping Hands": 0,
     "Head Tilting": 0.05,
     "Hands On Head": 0.3,
     "Touching Hair": 0.3,
     "Covering Face": 0.5,
-    "Covering Mouth": 0.5,
-    "Touching Chin": 0.5,
-    "Head Shaking": 0,
 }
 
 
@@ -92,10 +99,14 @@ def get_hold_seconds(gesture):
     return GESTURE_HOLD_SECONDS.get(gesture, 0)
 
 
+def get_cooldown_seconds(gesture):
+    return GESTURE_COOLDOWN_SECONDS.get(gesture, SAME_GESTURE_COOLDOWN_SECONDS)
+
+
 def get_gesture_send_rule(gesture):
     """返回前端发送某个动作弹幕时需要遵守的规则。"""
     return {
-        "cooldownSeconds": SAME_GESTURE_COOLDOWN_SECONDS,
+        "cooldownSeconds": get_cooldown_seconds(gesture),
         "holdSeconds": get_hold_seconds(gesture),
     }
 

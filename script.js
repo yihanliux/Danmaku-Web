@@ -238,6 +238,16 @@ let currentHeldGesture = null;
 let currentHeldGestureStartedAt = 0;
 const lastGestureTriggerTimes = new Map();
 
+function hideCameraStatusIfPreviewHasFrame() {
+  if (!cameraPreview.srcObject || cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return false;
+  }
+
+  cameraStatus.classList.add("hidden");
+  updateGestureRecognitionState();
+  return true;
+}
+
 /*
   更新视频标题文字。
   现在 Select Video 按钮和视频标题已经拆开了：
@@ -1362,7 +1372,7 @@ async function startCameraPreview() {
   }
 
   if (cameraStream) {
-    cameraStatus.classList.add("hidden");
+    hideCameraStatusIfPreviewHasFrame();
     updateGestureRecognitionState();
     return;
   }
@@ -1392,8 +1402,20 @@ async function startCameraPreview() {
 
     cameraStream = stream;
     cameraPreview.srcObject = stream;
-    await cameraPreview.play();
-    cameraStatus.classList.add("hidden");
+    const playPromise = cameraPreview.play();
+
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch((error) => {
+        if (hideCameraStatusIfPreviewHasFrame()) {
+          return;
+        }
+
+        console.error("Camera playback error:", error);
+        cameraStatus.textContent = getCameraErrorMessage(error);
+      });
+    }
+
+    hideCameraStatusIfPreviewHasFrame();
     updateGestureRecognitionState();
   } catch (error) {
     console.error("Camera error:", error);
@@ -1423,7 +1445,7 @@ function startGestureRecognition() {
   }
 
   gestureStatus.classList.remove("hidden");
-  gestureTimer = window.setInterval(detectGestureFromCamera, 600);
+  gestureTimer = window.setInterval(detectGestureFromCamera, 200);
 }
 
 /*
@@ -1734,10 +1756,10 @@ function updateGestureDebug(debug) {
       if (pose.headShaking.reason) {
         lines.push(`shake reason: ${pose.headShaking.reason}`);
       } else {
-        lines.push(`shake yaw: ${formatDebugNumber(pose.headShaking.yaw)}`);
+        lines.push(`shake yaw/base/rel: ${formatDebugNumber(pose.headShaking.yaw)} / ${formatDebugNumber(pose.headShaking.baselineYaw)} / ${formatDebugNumber(pose.headShaking.relativeYaw)}`);
         lines.push(`shake range: ${formatDebugNumber(pose.headShaking.yawRange)} >= ${formatDebugNumber(pose.headShaking.rangeThreshold)}`);
-        lines.push(`shake min/max: ${formatDebugNumber(pose.headShaking.minYaw)} / ${formatDebugNumber(pose.headShaking.maxYaw)}`);
-        lines.push(`shake changes: ${pose.headShaking.directionChanges || 0} samples=${pose.headShaking.sampleCount || 0}`);
+        lines.push(`shake rel min/max: ${formatDebugNumber(pose.headShaking.minRelativeYaw)} / ${formatDebugNumber(pose.headShaking.maxRelativeYaw)}`);
+        lines.push(`shake changes: ${pose.headShaking.directionChanges || 0} / ${pose.headShaking.minDirectionChanges || 0} samples=${pose.headShaking.sampleCount || 0}`);
       }
     }
 
@@ -1961,6 +1983,10 @@ videoPlayer.addEventListener("ended", updateDanmakuAnimationState);
 videoPlayer.addEventListener("play", updateGestureRecognitionState);
 videoPlayer.addEventListener("pause", updateGestureRecognitionState);
 videoPlayer.addEventListener("ended", updateGestureRecognitionState);
+
+cameraPreview.addEventListener("loadeddata", hideCameraStatusIfPreviewHasFrame);
+cameraPreview.addEventListener("canplay", hideCameraStatusIfPreviewHasFrame);
+cameraPreview.addEventListener("playing", hideCameraStatusIfPreviewHasFrame);
 
 // 点击 Send 按钮时，发送输入框里的弹幕。
 danmakuSendButton.addEventListener("click", sendDanmaku);

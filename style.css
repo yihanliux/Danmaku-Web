@@ -730,7 +730,7 @@ body {
 
 /* hidden 类专门用来隐藏音量条。 */
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .camera-column {

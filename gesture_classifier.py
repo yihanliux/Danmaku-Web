@@ -97,10 +97,11 @@ HEAD_TILT_ANGLE_THRESHOLD = 20
 # 这里不用单帧姿态，而是记录 nose 相对双耳中心的横向偏移：
 #   head_yaw = (nose.x - 双耳中心.x) / 双耳距离
 # 正负号表示鼻子偏向左右哪一侧，绝对值表示偏移幅度。
-HEAD_SHAKE_WINDOW_SECONDS = 2.4
-HEAD_SHAKE_MIN_SAMPLES = 3
-HEAD_SHAKE_YAW_THRESHOLD = 0.03
-HEAD_SHAKE_RANGE_THRESHOLD = 0.08
+HEAD_SHAKE_WINDOW_SECONDS = 3
+HEAD_SHAKE_MIN_SAMPLES = 6
+HEAD_SHAKE_YAW_THRESHOLD = 0.035
+HEAD_SHAKE_RANGE_THRESHOLD = 0.09
+HEAD_SHAKE_MIN_DIRECTION_CHANGES = 3
 
 # Covering Face / Covering Mouth 使用的距离都不是像素距离，而是归一化距离。
 # 归一化使用的尺度是 face_scale：
@@ -109,8 +110,6 @@ HEAD_SHAKE_RANGE_THRESHOLD = 0.08
 #
 # Covering Face / Covering Mouth 的候选手部点包括：
 # - pose 模型里的左/右手腕点；
-# - hand 模型里的部分手部关键点，例如手腕、指尖、掌指关节点。
-#
 # 当前最终判定规则是：
 #   手部候选点靠近眼睛/嘴巴目标区域
 #   AND 手部候选点没有明显高于目标区域
@@ -157,6 +156,7 @@ FACE_COVER_ABOVE_TARGET_THRESHOLD = -0.3
 # 值越小：越严格，更能避免“捂嘴”被眼睛区域抢成 Covering Face。
 # 值越大：越宽松，如果真实捂眼/捂嘴时手指或手腕经常偏低，可以适当调大。
 FACE_COVER_BELOW_TARGET_THRESHOLD = 0.3
+MOUTH_COVER_ABOVE_TARGET_THRESHOLD = -0.02
 
 # “眼睛/嘴巴可能被遮挡”的 visibility 阈值。
 # 如果目标区域 landmarks 的最小 visibility <= 这个值，
@@ -340,6 +340,12 @@ class GestureClassifier:
             points.extend(self._landmark_points(landmarks))
 
         return points
+
+    def _has_two_complete_hands(self, hand_landmarks):
+        return (
+            len(hand_landmarks or []) >= 2
+            and all(len(landmarks) >= 21 for landmarks in hand_landmarks[:2])
+        )
 
     def _connections_for_hand_count(self, hand_count):
         """根据检测到的手数量，生成前端绘制骨架线需要的连接索引。"""
@@ -564,6 +570,13 @@ class GestureClassifier:
 
     def _covering_mouth_debug(self, pose_result, hand_landmarks=None):
         """判断 Covering Mouth：手部候选点靠近嘴部区域，并排除合掌动作的干扰。"""
+        if self._has_two_complete_hands(hand_landmarks):
+            return {
+                "matched": False,
+                "reason": "blockedByTwoCompleteHands",
+                "handCount": len(hand_landmarks or []),
+            }
+
         palms_together = self._palms_together_debug(hand_landmarks or [])
 
         if is_gesture_enabled("Pressing Palms Together") and palms_together["matched"]:
@@ -578,10 +591,18 @@ class GestureClassifier:
             hand_landmarks,
             region_name="mouth",
             region_indices=(MOUTH_LEFT, MOUTH_RIGHT),
+            require_above_target=True,
         )
 
     def _touching_chin_debug(self, pose_result, hand_landmarks=None):
         """判断 Touching Chin：任意一只手的手腕、手掌或手指靠近估算的下巴区域。"""
+        if self._has_two_complete_hands(hand_landmarks):
+            return {
+                "matched": False,
+                "reason": "blockedByTwoCompleteHands",
+                "handCount": len(hand_landmarks or []),
+            }
+
         if not pose_result.pose_landmarks:
             return {
                 "matched": False,
@@ -607,24 +628,37 @@ class GestureClassifier:
             }
 
         landmarks = pose_result.pose_landmarks[0]
-        visible_mouth_points = [
-            landmarks[index]
-            for index in (MOUTH_LEFT, MOUTH_RIGHT)
-            if self._pose_landmark_visible(landmarks[index])
-        ]
+        mouth_points = [landmarks[MOUTH_LEFT], landmarks[MOUTH_RIGHT]]
+        mouth_visibility = {
+            "mouthLeft": self._pose_visibility(landmarks[MOUTH_LEFT]),
+            "mouthRight": self._pose_visibility(landmarks[MOUTH_RIGHT]),
+        }
 
-        if not visible_mouth_points:
+        if not all(self._pose_landmark_visible(point) for point in mouth_points):
             return {
                 "matched": False,
                 "reason": "missingMouthLandmarks",
-                "visibility": {
-                    "mouthLeft": self._pose_visibility(landmarks[MOUTH_LEFT]),
-                    "mouthRight": self._pose_visibility(landmarks[MOUTH_RIGHT]),
-                },
+                "visibility": mouth_visibility,
             }
 
         face_scale = self._face_scale(landmarks)
-        mouth_center = self._average_point(visible_mouth_points)
+        mouth_center = self._average_point(mouth_points)
+        mouth_cover_candidate = self._face_region_cover_debug(
+            pose_result,
+            hand_landmarks,
+            region_name="mouth",
+            region_indices=(MOUTH_LEFT, MOUTH_RIGHT),
+            require_above_target=True,
+        )
+
+        if mouth_cover_candidate["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByMouthCoverCandidate",
+                "mouthCoverCandidate": mouth_cover_candidate,
+                "visibility": mouth_visibility,
+            }
+
         chin_center = SimpleNamespace(
             x=mouth_center.x,
             y=mouth_center.y + face_scale * CHIN_CENTER_VERTICAL_OFFSET,
@@ -730,7 +764,14 @@ class GestureClassifier:
             "minBelowMouth": CHIN_TOUCH_MIN_BELOW_MOUTH,
         }
 
-    def _face_region_cover_debug(self, pose_result, hand_landmarks, region_name, region_indices):
+    def _face_region_cover_debug(
+        self,
+        pose_result,
+        hand_landmarks,
+        region_name,
+        region_indices,
+        require_above_target=False,
+    ):
         """通用的脸部区域遮挡判断。
 
         region_indices 决定目标区域是眼睛还是嘴巴。
@@ -767,7 +808,13 @@ class GestureClassifier:
         face_scale = self._face_scale(landmarks)
         left_debug = self._wrist_face_region_debug(landmarks[LEFT_WRIST_POSE], target_points, target_center, face_scale)
         right_debug = self._wrist_face_region_debug(landmarks[RIGHT_WRIST_POSE], target_points, target_center, face_scale)
-        hand_landmark_debug = self._hand_landmark_face_region_debug(hand_landmarks, target_points, target_center, face_scale)
+        hand_landmark_debug = self._hand_landmark_face_region_debug(
+            hand_landmarks,
+            target_points,
+            target_center,
+            face_scale,
+            require_above_target=require_above_target,
+        )
         region_visibility = [
             self._pose_visibility(landmarks[index])
             for index in region_indices
@@ -776,9 +823,21 @@ class GestureClassifier:
             bool(region_visibility)
             and min(region_visibility) <= FACE_COVER_VISIBILITY_THRESHOLD
         )
-        left_debug["covering"] = self._is_face_region_covered_by_wrist(left_debug, has_low_region_visibility)
-        right_debug["covering"] = self._is_face_region_covered_by_wrist(right_debug, has_low_region_visibility)
-        hand_landmark_debug["covering"] = self._is_face_region_covered_by_wrist(hand_landmark_debug, has_low_region_visibility)
+        left_debug["covering"] = self._is_face_region_covered_by_wrist(
+            left_debug,
+            has_low_region_visibility,
+            require_above_target=require_above_target,
+        )
+        right_debug["covering"] = self._is_face_region_covered_by_wrist(
+            right_debug,
+            has_low_region_visibility,
+            require_above_target=require_above_target,
+        )
+        hand_landmark_debug["covering"] = self._is_face_region_covered_by_wrist(
+            hand_landmark_debug,
+            has_low_region_visibility,
+            require_above_target=require_above_target,
+        )
         matched = left_debug["covering"] or right_debug["covering"] or hand_landmark_debug["covering"]
 
         return {
@@ -793,19 +852,29 @@ class GestureClassifier:
             "lowRegionVisibility": has_low_region_visibility,
             "regionVisibilityMin": min(region_visibility) if region_visibility else None,
             "regionVisibility": region_visibility,
+            "requireAboveTarget": require_above_target,
             "left": left_debug,
             "right": right_debug,
             "handLandmark": hand_landmark_debug,
             "faceScale": face_scale,
         }
 
-    def _is_face_region_covered_by_wrist(self, wrist_debug, has_low_region_visibility):
+    def _is_face_region_covered_by_wrist(
+        self,
+        wrist_debug,
+        has_low_region_visibility,
+        require_above_target=False,
+    ):
         """根据距离、上下方向和目标区域可见性，判断候选点是否真正构成遮挡。"""
         if wrist_debug.get("reason"):
             return False
 
         return (
             wrist_debug["nearRegion"]
+            and (
+                not require_above_target
+                or wrist_debug["isAboveTarget"]
+            )
             and wrist_debug["notClearlyAboveTarget"]
             and wrist_debug["notClearlyBelowTarget"]
             and (
@@ -835,6 +904,7 @@ class GestureClassifier:
         very_close_region = nearest_distance <= FACE_COVER_VERY_CLOSE_THRESHOLD
         not_clearly_above_target = signed_vertical_distance >= FACE_COVER_ABOVE_TARGET_THRESHOLD
         not_clearly_below_target = signed_vertical_distance <= FACE_COVER_BELOW_TARGET_THRESHOLD
+        is_above_target = signed_vertical_distance <= MOUTH_COVER_ABOVE_TARGET_THRESHOLD
         inside_face_zone = (
             horizontal_distance <= FACE_COVER_HORIZONTAL_THRESHOLD
             and vertical_distance <= FACE_COVER_VERTICAL_THRESHOLD
@@ -846,6 +916,8 @@ class GestureClassifier:
             "veryCloseRegion": very_close_region,
             "notClearlyAboveTarget": not_clearly_above_target,
             "notClearlyBelowTarget": not_clearly_below_target,
+            "isAboveTarget": is_above_target,
+            "aboveTargetRequiredThreshold": MOUTH_COVER_ABOVE_TARGET_THRESHOLD,
             "insideFaceZone": inside_face_zone,
             "nearestDistance": nearest_distance,
             "nearestDistanceThreshold": FACE_COVER_DISTANCE_THRESHOLD,
@@ -859,7 +931,14 @@ class GestureClassifier:
             "verticalThreshold": FACE_COVER_VERTICAL_THRESHOLD,
         }
 
-    def _hand_landmark_face_region_debug(self, hand_landmarks, target_points, target_center, face_scale):
+    def _hand_landmark_face_region_debug(
+        self,
+        hand_landmarks,
+        target_points,
+        target_center,
+        face_scale,
+        require_above_target=False,
+    ):
         """从 hand 模型关键点中选择最接近脸部目标区域的候选点。"""
         candidates = []
 
@@ -882,9 +961,20 @@ class GestureClassifier:
                 "nearRegion": False,
                 "veryCloseRegion": False,
                 "notClearlyAboveTarget": False,
+                "notClearlyBelowTarget": False,
+                "isAboveTarget": False,
                 "insideFaceZone": False,
                 "reason": "noHandLandmarks",
             }
+
+        if require_above_target:
+            above_target_candidates = [
+                candidate for candidate in candidates
+                if candidate["isAboveTarget"]
+            ]
+
+            if above_target_candidates:
+                return min(above_target_candidates, key=lambda candidate: candidate["nearestDistance"])
 
         return min(candidates, key=lambda candidate: candidate["nearestDistance"])
 
@@ -900,6 +990,7 @@ class GestureClassifier:
         very_close_region = nearest_distance <= FACE_COVER_VERY_CLOSE_THRESHOLD
         not_clearly_above_target = signed_vertical_distance >= FACE_COVER_ABOVE_TARGET_THRESHOLD
         not_clearly_below_target = signed_vertical_distance <= FACE_COVER_BELOW_TARGET_THRESHOLD
+        is_above_target = signed_vertical_distance <= MOUTH_COVER_ABOVE_TARGET_THRESHOLD
         inside_face_zone = (
             horizontal_distance <= FACE_COVER_HORIZONTAL_THRESHOLD
             and vertical_distance <= FACE_COVER_VERTICAL_THRESHOLD
@@ -911,6 +1002,8 @@ class GestureClassifier:
             "veryCloseRegion": very_close_region,
             "notClearlyAboveTarget": not_clearly_above_target,
             "notClearlyBelowTarget": not_clearly_below_target,
+            "isAboveTarget": is_above_target,
+            "aboveTargetRequiredThreshold": MOUTH_COVER_ABOVE_TARGET_THRESHOLD,
             "insideFaceZone": inside_face_zone,
             "nearestDistance": nearest_distance,
             "nearestDistanceThreshold": FACE_COVER_DISTANCE_THRESHOLD,
@@ -1161,19 +1254,23 @@ class GestureClassifier:
                 "yaw": yaw,
                 "yawThreshold": HEAD_SHAKE_YAW_THRESHOLD,
                 "rangeThreshold": HEAD_SHAKE_RANGE_THRESHOLD,
+                "minDirectionChanges": HEAD_SHAKE_MIN_DIRECTION_CHANGES,
             }
 
         min_yaw = min(yaw_values)
         max_yaw = max(yaw_values)
         yaw_range = max_yaw - min_yaw
-        has_left = min_yaw <= -HEAD_SHAKE_YAW_THRESHOLD
-        has_right = max_yaw >= HEAD_SHAKE_YAW_THRESHOLD
-        direction_changes = self._head_shake_direction_changes(yaw_values)
+        baseline_yaw = (min_yaw + max_yaw) / 2
+        min_relative_yaw = min_yaw - baseline_yaw
+        max_relative_yaw = max_yaw - baseline_yaw
+        has_left = min_relative_yaw <= -HEAD_SHAKE_YAW_THRESHOLD
+        has_right = max_relative_yaw >= HEAD_SHAKE_YAW_THRESHOLD
+        direction_changes = self._head_shake_direction_changes(yaw_values, baseline_yaw)
         matched = (
             has_left
             and has_right
             and yaw_range >= HEAD_SHAKE_RANGE_THRESHOLD
-            and direction_changes >= 1
+            and direction_changes >= HEAD_SHAKE_MIN_DIRECTION_CHANGES
         )
 
         return {
@@ -1183,21 +1280,28 @@ class GestureClassifier:
             "yaw": yaw,
             "minYaw": min_yaw,
             "maxYaw": max_yaw,
+            "baselineYaw": baseline_yaw,
+            "relativeYaw": yaw - baseline_yaw,
+            "minRelativeYaw": min_relative_yaw,
+            "maxRelativeYaw": max_relative_yaw,
             "yawRange": yaw_range,
             "yawThreshold": HEAD_SHAKE_YAW_THRESHOLD,
             "rangeThreshold": HEAD_SHAKE_RANGE_THRESHOLD,
             "directionChanges": direction_changes,
+            "minDirectionChanges": HEAD_SHAKE_MIN_DIRECTION_CHANGES,
             "windowSeconds": HEAD_SHAKE_WINDOW_SECONDS,
         }
 
-    def _head_shake_direction_changes(self, yaw_values):
+    def _head_shake_direction_changes(self, yaw_values, baseline_yaw=0):
         """统计窗口中左右方向越过阈值后的切换次数。"""
         directions = []
 
         for yaw in yaw_values:
-            if yaw >= HEAD_SHAKE_YAW_THRESHOLD:
+            relative_yaw = yaw - baseline_yaw
+
+            if relative_yaw >= HEAD_SHAKE_YAW_THRESHOLD:
                 direction = 1
-            elif yaw <= -HEAD_SHAKE_YAW_THRESHOLD:
+            elif relative_yaw <= -HEAD_SHAKE_YAW_THRESHOLD:
                 direction = -1
             else:
                 continue
