@@ -114,22 +114,24 @@ body {
   align-items: flex-start;
   justify-content: flex-start;
   padding: 60px 15px 20px;
+  overflow-x: auto;
 }
 
 /* 左侧播放器和右侧摄像头预览组成一个工作区。 */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(280px, 28vw, 720px);
+  grid-template-columns: 1200px 440px;
   gap: 24px;
   align-items: start;
-  width: 100%;
-  max-width: calc(100vw - 96px);
+  width: max-content;
+  max-width: none;
 }
 
 /* 播放器外壳。实际实验尺寸会被文件底部的固定布局规则再次约束。 */
 .player {
-  width: 100%;
+  width: 1200px;
   max-width: 1200px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: visible;
@@ -142,6 +144,8 @@ body {
 .player-topbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 0px 0px;
   border-bottom: 1px solid #f6f7f8;
   background: #f6f7f8;
@@ -155,6 +159,7 @@ body {
 .title-text {
   min-width: 0;
   max-width: 100%;
+  flex: 1 1 auto;
   padding: 20px 0px;
   color: #111111;
   font-size: 28px;
@@ -167,7 +172,8 @@ body {
 /* 视频区域填满顶部栏之外的所有空间。 */
 .screen {
   position: relative;
-  width: 100%;
+  width: 1200px;
+  min-height: 0;
   overflow: hidden;
   background: #f6f7f8;
   aspect-ratio: 16 / 9;
@@ -291,8 +297,9 @@ body {
 .player-controls {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 12px;
-  padding: 12px 0;
+  padding: 12px 12px;
   background: #ffffff;
   color: #111111;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -304,8 +311,8 @@ body {
   按钮本身尽量简单，真正看到的是里面的图片。
 */
 .icon-button {
-  width: 50px;
-  height: 50px;
+  width: 42px;
+  height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -350,11 +357,11 @@ body {
 }
 
 #danmakuToggleButton {
-  margin-left: 20px;
+  margin-left: 10px;
 }
 
 #danmakuSettingsButton {
-  margin-left: -4px;
+  margin-left: 0px;
 }
 
 .danmaku-settings-wrapper {
@@ -513,7 +520,7 @@ body {
   display: flex;
   align-items: center;
   flex: 0 0 auto;
-  width: 330px;
+  width: 400px;
 }
 
 .danmaku-input {
@@ -528,7 +535,7 @@ body {
   font-size: 16px;
   font-weight: 520;
   outline: none;
-  margin-left: 5px;
+  margin-left: 0px;
 }
 
 .danmaku-form.danmaku-off .danmaku-input {
@@ -658,7 +665,7 @@ body {
   position: relative;
   display: flex;
   align-items: center;
-  margin-left: 20px;
+  margin-left: 0px;
 }
 
 /*
@@ -734,18 +741,33 @@ body {
 }
 
 .camera-column {
-  width: 100%;
-  max-width: 100%;
+  width: 440px;
   margin-top: 83px;
 }
 
 .shortcuts-column {
   display: none;
-  width: 100%;
-  max-width: 100%;
+  width: 440px;
+  margin-top: -20px;
+}
+
+.gesture-column {
+  display: none;
+  width: 440px;
+  margin-top: -20px;
 }
 
 .shortcuts-panel {
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  background: #f6f7f8;
+  color: #111111;
+}
+
+.gesture-panel {
   max-width: 100%;
   display: flex;
   flex-direction: column;
@@ -813,6 +835,13 @@ body {
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.player-topbar .shortcut-language-button {
+  order: 0;
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .shortcut-language-button:hover,
@@ -1256,6 +1285,17 @@ body {
   aspect-ratio: 16 / 9;
 }
 
+.camera-capture {
+  position: fixed;
+  left: -2px;
+  top: -2px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /*
   摄像头 video 始终显示。
   object-fit: cover 会让画面填满预览框，必要时裁剪边缘，避免出现黑边。
@@ -1321,182 +1361,8 @@ body {
 }
 
 /* 中等屏幕上的自适应兜底布局；实验固定布局会在文件底部覆盖部分规则。 */
-@media (max-width: 1200px) {
-  .experiment-toolbar {
-    padding: 10px 32px 0;
-  }
-
-  .experiment-toolbar-inner {
-    max-width: calc(100vw - 64px);
-  }
-
-  .app {
-    padding: 8px 32px 28px;
-  }
-
-  .workspace {
-    grid-template-columns: minmax(0, 1fr) clamp(240px, 26vw, 360px);
-    gap: 18px;
-    max-width: calc(100vw - 64px);
-  }
-
-  .player-controls {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .progress-bar {
-    min-width: 180px;
-  }
-
-  .danmaku-form {
-    width: 280px;
-  }
-
-  .danmaku-input {
-    font-size: 14px;
-  }
-
-  .danmaku-send-button {
-    font-size: 14px;
-  }
-
-  .camera-column,
-  .shortcuts-column {
-    margin-top: 72px;
-  }
-}
-
 /* 窄屏下把摄像头区域放到播放器下方，避免两列内容互相挤压。 */
-@media (max-width: 980px) {
-  .workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .camera-column,
-  .shortcuts-column {
-    width: min(100%, 520px);
-    margin-top: 0;
-  }
-}
-
 /* 手机宽度下进一步压缩控制栏、标题和弹幕输入区尺寸。 */
-@media (max-width: 640px) {
-  .experiment-toolbar {
-    display: flex;
-    padding: 10px 16px 0;
-  }
-
-  .experiment-toolbar-inner {
-    max-width: 100%;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .experiment-toolbar-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .select-button,
-  .condition-control,
-  .condition-segmented {
-    width: 100%;
-  }
-
-  .condition-segmented {
-    justify-content: stretch;
-  }
-
-  .condition-button {
-    flex: 1 1 0;
-  }
-
-  .app {
-    padding: 8px 16px 16px;
-  }
-
-  .workspace {
-    grid-template-columns: 1fr;
-    gap: 16px;
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .player {
-    width: 100%;
-    height: auto;
-    min-height: 360px;
-  }
-
-  .player-topbar {
-    padding: 12px;
-  }
-
-  .title-text {
-    min-height: 36px;
-    max-width: 100%;
-    padding: 0 12px;
-    font-size: 0.85rem;
-  }
-
-  .screen {
-    min-height: 300px;
-  }
-
-  .player-controls {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 12px 0;
-  }
-
-  .icon-button {
-    width: 42px;
-    height: 42px;
-  }
-
-  .control-icon {
-    width: 26px;
-    height: 26px;
-  }
-
-  .danmaku-control-icon {
-    width: 30px;
-    height: 30px;
-  }
-
-  .time-text {
-    width: 96px;
-    font-size: 14px;
-  }
-
-  .progress-bar {
-    order: 2;
-    flex-basis: 100%;
-  }
-
-  .danmaku-form {
-    order: 3;
-    width: 100%;
-  }
-
-  .danmaku-input {
-    flex: 1;
-    width: auto;
-  }
-
-  .volume-wrapper {
-    margin-left: auto;
-  }
-
-  .camera-column,
-  .shortcuts-column {
-    width: 100%;
-    margin-top: 0;
-  }
-}
-
 /*
   实验用固定布局。
   video 和 camera 不再根据屏幕宽度缩放；如果显示器宽度不够，页面横向滚动。
@@ -1550,81 +1416,12 @@ body {
   outline-offset: 2px;
 }
 
-@media (max-width: 640px) {
-  .condition-control {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-}
-
-.app {
-  overflow-x: auto;
-}
-
-.workspace {
-  grid-template-columns: 1200px 440px;
-  width: max-content;
-  max-width: none;
-}
-
-.player {
-  width: 1200px;
-  max-width: 1200px;
-  min-height: 0;
-}
-
-.screen {
-  width: 1200px;
-  min-height: 0;
-}
-
-.player-controls {
-  flex-wrap: nowrap;
-  gap: 12px;
-}
-
-.icon-button {
-  width: 50px;
-  height: 50px;
-}
-
-.control-icon {
-  width: 30px;
-  height: 30px;
-}
-
-.danmaku-control-icon {
-  width: 35px;
-  height: 35px;
-}
-
-.time-text {
-  width: 112px;
-  font-size: 16px;
-}
-
-.danmaku-form {
-  order: 0;
-  width: 330px;
-}
-
-.camera-column {
-  width: 440px;
-  margin-top: 83px;
-}
-
-.shortcuts-column {
-  width: 440px;
-  margin-top: -20px;
-}
-
-.camera-panel {
-  width: 100%;
-}
-
 body[data-condition="baseline"] .workspace {
   grid-template-columns: 1200px;
+}
+
+body[data-condition="gesture-triggered"] .workspace {
+  grid-template-columns: 1200px 440px;
 }
 
 body[data-condition="baseline"] .camera-column,
@@ -1641,7 +1438,12 @@ body[data-condition="on-device"] .shortcuts-column {
   display: block;
 }
 
-.shortcuts-panel {
+body[data-condition="gesture-triggered"] .gesture-column {
+  display: block;
+}
+
+.shortcuts-panel,
+.gesture-panel {
   width: 100%;
   height: 850px;
   min-height: 0;
@@ -1650,6 +1452,154 @@ body[data-condition="on-device"] .shortcuts-column {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+.gesture-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.gesture-card {
+  position: relative;
+  min-width: 0;
+  height: 248px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #ffffff;
+  border-radius: 8px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.gesture-card.is-gesture-cooling::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: rgba(24, 25, 28, 0.46);
+  box-shadow: inset 0 0 0 999px rgba(24, 25, 28, 0.08);
+  pointer-events: none;
+}
+
+.gesture-card.is-gesture-cooling::after {
+  content: "冷却中";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: #ffffff;
+  background: rgba(24, 25, 28, 0.82);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.gesture-card-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gesture-context-label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #18191C;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.gesture-action-label {
+  display: none;
+}
+
+.gesture-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.gesture-danmaku-button,
+.gesture-custom-button {
+  max-width: 100%;
+}
+
+.gesture-custom-button {
+  min-width: 106px;
+}
+
+.gesture-action-image {
+  width: 100%;
+  height: 94px;
+  margin-top: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.gesture-panel.is-shortcut-setup-mode .gesture-danmaku-button {
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.gesture-panel.is-shortcut-setup-mode .gesture-danmaku-button:hover {
+  transform: translateY(-1px);
+}
+
+.gesture-panel.is-shortcut-setup-mode .gesture-danmaku-button .shortcut-default-text {
+  position: static;
+  transform: none;
+  opacity: 1;
+}
+
+.gesture-panel.is-shortcut-setup-mode .gesture-danmaku-button .shortcut-hover-content {
+  display: none;
+}
+
+.gesture-panel.is-shortcut-send-mode .gesture-card {
+  height: 240px;
+}
+
+.gesture-panel.is-shortcut-send-mode .gesture-card-actions {
+  row-gap: 8px;
+}
+
+.gesture-panel.is-shortcut-send-mode .gesture-danmaku-button {
+  cursor: default;
+}
+
+.gesture-panel.is-shortcut-send-mode .gesture-danmaku-button:hover {
+  transform: none;
+}
+
+.gesture-panel.is-shortcut-send-mode .gesture-danmaku-button .shortcut-default-text {
+  position: static;
+  transform: none;
+  opacity: 1;
+}
+
+.gesture-panel.is-shortcut-send-mode .gesture-danmaku-button .shortcut-hover-content {
+  display: none;
+}
+
+.gesture-panel.is-shortcut-send-mode .gesture-action-image {
+  height: 129px;
+}
+
+.gesture-confirm-button {
+  flex: 0 0 auto;
+  margin-top: 14px;
 }
 
 .player:fullscreen {

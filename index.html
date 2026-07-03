@@ -26,7 +26,7 @@
               Baseline
             </button>
             <button class="condition-button" type="button" data-condition-id="on-device" aria-pressed="false">
-              On-device
+              Click
             </button>
             <button class="condition-button" type="button" data-condition-id="gesture-triggered" aria-pressed="false">
               Gesture
@@ -42,6 +42,10 @@
       <section class="player" aria-label="Local video player">
         <header class="player-topbar">
           <div id="videoTitle" class="title-text">Please Select a Video</div>
+          <button id="shortcutLanguageButton" class="shortcut-language-button" type="button" aria-label="切换语言">
+            <img class="shortcut-language-icon" src="src/language.png" alt="">
+            <span id="shortcutLanguageText">中文-简体</span>
+          </button>
         </header>
 
         <div class="screen">
@@ -116,13 +120,13 @@
               id="danmakuInput"
               class="danmaku-input"
               type="text"
-              placeholder="Comment on this moment"
+              placeholder="发个友善的弹幕见证当下"
               autocomplete="off"
             >
             <button id="danmakuSendButton" class="danmaku-send-button" type="button">
-              <span class="typing-send-default">Send</span>
+              <span class="typing-send-default">发送</span>
               <span class="typing-send-hover-content" aria-hidden="true">
-                <span>Send</span>
+                <span>发送</span>
                 <img class="typing-send-icon" src="src/Send_Typing.png" alt="">
               </span>
             </button>
@@ -160,10 +164,6 @@
               <img class="shortcuts-title-icon" src="src/Danmaku.png" alt="">
               <h2 class="shortcuts-title">弹幕一键发送</h2>
             </div>
-            <button id="shortcutLanguageButton" class="shortcut-language-button" type="button" aria-label="切换语言">
-              <img class="shortcut-language-icon" src="src/language.png" alt="">
-              <span id="shortcutLanguageText">中文-简体</span>
-            </button>
           </div>
           <p id="shortcutSetupHint" class="shortcut-setup-hint">
             请选择最多 6 条偏好的弹幕，或自定义弹幕作为快捷弹幕。确认后即可一键发送。
@@ -244,14 +244,138 @@
         </aside>
       </div>
 
-      <div class="camera-column">
-        <aside class="camera-panel" aria-label="Camera preview">
+      <div class="gesture-column">
+        <aside class="gesture-panel" aria-label="Gesture danmaku shortcuts">
+          <div class="shortcuts-header">
+            <div class="shortcuts-title-row">
+              <img class="shortcuts-title-icon" src="src/Danmaku.png" alt="">
+              <h2 id="gestureTitle" class="shortcuts-title">弹幕一键发送</h2>
+            </div>
+          </div>
+          <p id="gestureSetupHint" class="shortcut-setup-hint">
+            请选择最多 6 条偏好的弹幕，或自定义弹幕作为快捷弹幕。确认后即可一键发送。
+          </p>
+          <div class="gesture-content" aria-label="Gesture danmaku options">
+            <article class="gesture-card gesture-card-p" data-context="得分" data-gesture="Raising One Fist" data-shortcut-group="P">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">得分</span>
+                <span class="gesture-action-label">Raising One Fist</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-p gesture-danmaku-button" type="button" data-shortcut-group="P" data-danmaku-text="精彩"><span class="shortcut-default-text">精彩</span><span class="shortcut-hover-content" aria-hidden="true"><span>精彩</span><img class="shortcut-send-icon" src="src/Send_P.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-p gesture-danmaku-button" type="button" data-shortcut-group="P" data-danmaku-text="牛逼"><span class="shortcut-default-text">牛逼</span><span class="shortcut-hover-content" aria-hidden="true"><span>牛逼</span><img class="shortcut-send-icon" src="src/Send_P.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-p gesture-danmaku-button" type="button" data-shortcut-group="P" data-danmaku-text="太棒了"><span class="shortcut-default-text">太棒了</span><span class="shortcut-hover-content" aria-hidden="true"><span>太棒了</span><img class="shortcut-send-icon" src="src/Send_P.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-p gesture-custom-button" type="button" data-shortcut-group="P" aria-label="自定义得分手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_P.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Raising One Fist.png" alt="Raising One Fist">
+            </article>
+
+            <article class="gesture-card gesture-card-n" data-context="失分" data-gesture="Head Shaking" data-shortcut-group="N">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">失分</span>
+                <span class="gesture-action-label">Head Shaking</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="可惜了"><span class="shortcut-default-text">可惜了</span><span class="shortcut-hover-content" aria-hidden="true"><span>可惜了</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="差一点"><span class="shortcut-default-text">差一点</span><span class="shortcut-hover-content" aria-hidden="true"><span>差一点</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-n gesture-custom-button" type="button" data-shortcut-group="N" aria-label="自定义失分手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_N.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Head Shaking.png" alt="Head Shaking">
+            </article>
+
+            <article class="gesture-card gesture-card-n" data-context="失分" data-gesture="Pressing Palms Together" data-shortcut-group="N">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">失分</span>
+                <span class="gesture-action-label">Pressing Palms Together</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="稳住"><span class="shortcut-default-text">稳住</span><span class="shortcut-hover-content" aria-hidden="true"><span>稳住</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="问题不大"><span class="shortcut-default-text">问题不大</span><span class="shortcut-hover-content" aria-hidden="true"><span>问题不大</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-n gesture-custom-button" type="button" data-shortcut-group="N" aria-label="自定义失分手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_N.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Pressing Palms Together.png" alt="Pressing Palms Together">
+            </article>
+
+            <article class="gesture-card gesture-card-n" data-context="嘲讽" data-gesture="Thumbs-Down" data-shortcut-group="N">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">嘲讽</span>
+                <span class="gesture-action-label">Thumbs-Down</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="就这？"><span class="shortcut-default-text">就这？</span><span class="shortcut-hover-content" aria-hidden="true"><span>就这？</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="拉完了"><span class="shortcut-default-text">拉完了</span><span class="shortcut-hover-content" aria-hidden="true"><span>拉完了</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="幽默"><span class="shortcut-default-text">幽默</span><span class="shortcut-hover-content" aria-hidden="true"><span>幽默</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-n gesture-custom-button" type="button" data-shortcut-group="N" aria-label="自定义嘲讽手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_N.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Thumbs-Down.png" alt="Thumbs-Down">
+            </article>
+
+            <article class="gesture-card gesture-card-n" data-context="质疑" data-gesture="Touching Chin" data-shortcut-group="N">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">质疑</span>
+                <span class="gesture-action-label">Touching Chin</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="啊？"><span class="shortcut-default-text">啊？</span><span class="shortcut-hover-content" aria-hidden="true"><span>啊？</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="裁判拉完了"><span class="shortcut-default-text">裁判拉完了</span><span class="shortcut-hover-content" aria-hidden="true"><span>裁判拉完了</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-n gesture-danmaku-button" type="button" data-shortcut-group="N" data-danmaku-text="离谱"><span class="shortcut-default-text">离谱</span><span class="shortcut-hover-content" aria-hidden="true"><span>离谱</span><img class="shortcut-send-icon" src="src/Send_N.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-n gesture-custom-button" type="button" data-shortcut-group="N" aria-label="自定义质疑手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_N.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Touching Chin.png" alt="Touching Chin">
+            </article>
+
+            <article class="gesture-card gesture-card-i" data-context="等待" data-gesture="Covering Mouth" data-shortcut-group="I">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">等待</span>
+                <span class="gesture-action-label">Covering Mouth</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-i gesture-danmaku-button" type="button" data-shortcut-group="I" data-danmaku-text="紧张"><span class="shortcut-default-text">紧张</span><span class="shortcut-hover-content" aria-hidden="true"><span>紧张</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-i gesture-danmaku-button" type="button" data-shortcut-group="I" data-danmaku-text="窒息了"><span class="shortcut-default-text">窒息了</span><span class="shortcut-hover-content" aria-hidden="true"><span>窒息了</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-i gesture-custom-button" type="button" data-shortcut-group="I" aria-label="自定义等待手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_I.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Covering Mouth.png" alt="Covering Mouth">
+            </article>
+
+            <article class="gesture-card gesture-card-i" data-context="等待" data-gesture="Clasping Hands" data-shortcut-group="I">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">等待</span>
+                <span class="gesture-action-label">Clasping Hands</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-i gesture-danmaku-button" type="button" data-shortcut-group="I" data-danmaku-text="加油"><span class="shortcut-default-text">加油</span><span class="shortcut-hover-content" aria-hidden="true"><span>加油</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-i gesture-danmaku-button" type="button" data-shortcut-group="I" data-danmaku-text="求求了"><span class="shortcut-default-text">求求了</span><span class="shortcut-hover-content" aria-hidden="true"><span>求求了</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-i gesture-custom-button" type="button" data-shortcut-group="I" aria-label="自定义等待手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_I.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Clasping Hands.png" alt="Clasping Hands">
+            </article>
+
+            <article class="gesture-card gesture-card-i" data-context="疑惑" data-gesture="Opening Both Palms Upward" data-shortcut-group="I">
+              <div class="gesture-card-copy">
+                <span class="gesture-context-label">疑惑</span>
+                <span class="gesture-action-label">Opening Both Palms Upward</span>
+              </div>
+              <div class="gesture-card-actions">
+                <button class="shortcut-button shortcut-button-i gesture-danmaku-button" type="button" data-shortcut-group="I" data-danmaku-text="什么情况"><span class="shortcut-default-text">什么情况</span><span class="shortcut-hover-content" aria-hidden="true"><span>什么情况</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-i gesture-danmaku-button" type="button" data-shortcut-group="I" data-danmaku-text="没看清"><span class="shortcut-default-text">没看清</span><span class="shortcut-hover-content" aria-hidden="true"><span>没看清</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+                <button class="shortcut-button shortcut-button-i gesture-danmaku-button" type="button" data-shortcut-group="I" data-danmaku-text="?"><span class="shortcut-default-text">?</span><span class="shortcut-hover-content" aria-hidden="true"><span>?</span><img class="shortcut-send-icon" src="src/Send_I.png" alt=""></span></button>
+                <button class="shortcut-add-button shortcut-add-button-i gesture-custom-button" type="button" data-shortcut-group="I" aria-label="自定义疑惑手势弹幕"><span>自定义</span><img class="shortcut-add-icon" src="src/custom_I.png" alt=""></button>
+              </div>
+              <img class="gesture-action-image" src="src/Opening Both Palms Upward.png" alt="Opening Both Palms Upward">
+            </article>
+          </div>
+          <button id="gestureConfirmButton" class="shortcut-confirm-button gesture-confirm-button" type="button" disabled>
+            确认
+          </button>
+        </aside>
+      </div>
+
+      <div class="camera-capture" aria-hidden="true">
           <video id="cameraPreview" autoplay muted playsinline></video>
-          <canvas id="handLandmarkCanvas" class="hand-landmark-canvas" aria-hidden="true"></canvas>
+          <canvas id="handLandmarkCanvas" class="hand-landmark-canvas"></canvas>
           <div id="cameraStatus" class="camera-status">Camera loading...</div>
           <div id="gestureStatus" class="gesture-status hidden">正在识别手势</div>
           <div id="gestureResult" class="gesture-result hidden">成功发送弹幕：厉害</div>
-        </aside>
       </div>
     </div>
   </main>

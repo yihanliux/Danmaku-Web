@@ -261,7 +261,7 @@ class GestureClassifier:
         if resource_dir:
             resource_util.set_resource_dir(resource_dir)
 
-    def classify_frame(self, image_data):
+    def classify_frame(self, image_data, allowed_gestures=None):
         """识别一帧摄像头画面，并返回前端需要的 JSON 友好数据。
 
         识别顺序是有意安排的：
@@ -272,6 +272,7 @@ class GestureClassifier:
 
         这样做的结果是：如果同一帧同时满足手势和 pose，优先返回手势。
         """
+        allowed_gesture_set = self._normalize_allowed_gestures(allowed_gestures)
         image = self._decode_image(image_data)
         image_debug = self._image_debug(image)
 
@@ -288,11 +289,11 @@ class GestureClassifier:
         landmark_points = self._all_landmark_points(hand_result.hand_landmarks)
         connections = self._connections_for_hand_count(len(hand_result.hand_landmarks))
         gesture = (
-            self._recognize_face_cover_gesture(pose_result, hand_result.hand_landmarks)
-            or self._recognize_two_hand_gesture(hand_result)
-            or self._recognize_built_in_gesture(hand_result)
-            or self._recognize_custom_gesture(hand_result.hand_landmarks)
-            or self._recognize_pose_gesture(pose_result, hand_result.hand_landmarks)
+            self._recognize_face_cover_gesture(pose_result, hand_result.hand_landmarks, allowed_gesture_set)
+            or self._recognize_two_hand_gesture(hand_result, allowed_gesture_set)
+            or self._recognize_built_in_gesture(hand_result, allowed_gesture_set)
+            or self._recognize_custom_gesture(hand_result.hand_landmarks, allowed_gesture_set)
+            or self._recognize_pose_gesture(pose_result, hand_result.hand_landmarks, allowed_gesture_set)
         )
         debug = self._debug_result(hand_result, pose_result, landmarks, image_debug=image_debug)
 
@@ -306,6 +307,22 @@ class GestureClassifier:
             )
 
         return self._result(False, landmarks=landmark_points, connections=connections, debug=debug)
+
+    def _normalize_allowed_gestures(self, allowed_gestures):
+        if allowed_gestures is None:
+            return None
+
+        return {
+            str(gesture)
+            for gesture in allowed_gestures
+            if isinstance(gesture, str) and gesture
+        }
+
+    def _can_recognize_gesture(self, gesture, allowed_gestures=None):
+        if not gesture or not is_gesture_enabled(gesture):
+            return False
+
+        return allowed_gestures is None or gesture in allowed_gestures
 
     def _decode_image(self, image_data):
         """把浏览器传来的 base64 data URL 转成 OpenCV 图像。"""
@@ -360,7 +377,7 @@ class GestureClassifier:
 
         return connections
 
-    def _recognize_two_hand_gesture(self, result):
+    def _recognize_two_hand_gesture(self, result, allowed_gestures=None):
         """识别所有需要两只手共同参与的动作。
 
         这里的顺序很重要：
@@ -374,14 +391,14 @@ class GestureClassifier:
         hands = self._hand_debug(result)
 
         if (
-            is_gesture_enabled("Raising Both Fists")
+            self._can_recognize_gesture("Raising Both Fists", allowed_gestures)
             and all(hand["category"] == "Closed_Fist" and hand["score"] >= TWO_HAND_GESTURE_SCORE_THRESHOLD for hand in hands)
         ):
             return "Raising Both Fists"
 
         clasped_hands = self._clasped_hands_debug(result.hand_landmarks)
 
-        if is_gesture_enabled("Clasping Hands") and clasped_hands["matched"]:
+        if self._can_recognize_gesture("Clasping Hands", allowed_gestures) and clasped_hands["matched"]:
             return "Clasping Hands"
 
         if not all(hand["open"] for hand in hands):
@@ -389,24 +406,24 @@ class GestureClassifier:
 
         palms_together = self._palms_together_debug(result.hand_landmarks)
 
-        if is_gesture_enabled("Pressing Palms Together") and palms_together["matched"]:
+        if self._can_recognize_gesture("Pressing Palms Together", allowed_gestures) and palms_together["matched"]:
             return "Pressing Palms Together"
 
         if (
-            is_gesture_enabled("Pressing Both Hands Downward")
+            self._can_recognize_gesture("Pressing Both Hands Downward", allowed_gestures)
             and all(hand["palmUpDownScore"] <= -PALM_UP_DOWN_THRESHOLD for hand in hands)
         ):
             return "Pressing Both Hands Downward"
 
         if (
-            is_gesture_enabled("Opening Both Palms Upward")
+            self._can_recognize_gesture("Opening Both Palms Upward", allowed_gestures)
             and all(hand["palmUpDownScore"] >= PALM_UP_DOWN_THRESHOLD for hand in hands)
         ):
             return "Opening Both Palms Upward"
 
         return None
 
-    def _recognize_built_in_gesture(self, result):
+    def _recognize_built_in_gesture(self, result, allowed_gestures=None):
         """识别 MediaPipe task 自带的单手手势，并映射成本项目动作名称。"""
         if not result.gestures or not result.gestures[0]:
             return None
@@ -416,17 +433,17 @@ class GestureClassifier:
             return None
 
         gesture = BUILT_IN_GESTURE_MAP.get(category.category_name)
-        return gesture if is_gesture_enabled(gesture) else None
+        return gesture if self._can_recognize_gesture(gesture, allowed_gestures) else None
 
-    def _recognize_custom_gesture(self, hand_landmarks):
+    def _recognize_custom_gesture(self, hand_landmarks, allowed_gestures=None):
         """识别本项目自己写规则的单手动作，目前是 Three-Point Gesture。"""
         for landmarks in hand_landmarks:
-            if is_gesture_enabled("Three-Point Gesture") and self._is_three_point_gesture(landmarks):
+            if self._can_recognize_gesture("Three-Point Gesture", allowed_gestures) and self._is_three_point_gesture(landmarks):
                 return "Three-Point Gesture"
 
         return None
 
-    def _recognize_face_cover_gesture(self, pose_result, hand_landmarks):
+    def _recognize_face_cover_gesture(self, pose_result, hand_landmarks, allowed_gestures=None):
         """优先识别脸部附近动作。
 
         Covering Face、Covering Mouth 和 Touching Chin 都依赖脸部关键点和手部候选点。
@@ -434,22 +451,22 @@ class GestureClassifier:
         """
         covering_face = self._covering_face_debug(pose_result, hand_landmarks)
 
-        if is_gesture_enabled("Covering Face") and covering_face["matched"]:
+        if self._can_recognize_gesture("Covering Face", allowed_gestures) and covering_face["matched"]:
             return "Covering Face"
 
-        covering_mouth = self._covering_mouth_debug(pose_result, hand_landmarks)
+        covering_mouth = self._covering_mouth_debug(pose_result, hand_landmarks, allowed_gestures)
 
-        if is_gesture_enabled("Covering Mouth") and covering_mouth["matched"]:
+        if self._can_recognize_gesture("Covering Mouth", allowed_gestures) and covering_mouth["matched"]:
             return "Covering Mouth"
 
-        touching_chin = self._touching_chin_debug(pose_result, hand_landmarks)
+        touching_chin = self._touching_chin_debug(pose_result, hand_landmarks, allowed_gestures)
 
-        if is_gesture_enabled("Touching Chin") and touching_chin["matched"]:
+        if self._can_recognize_gesture("Touching Chin", allowed_gestures) and touching_chin["matched"]:
             return "Touching Chin"
 
         return None
 
-    def _recognize_pose_gesture(self, pose_result, hand_landmarks=None):
+    def _recognize_pose_gesture(self, pose_result, hand_landmarks=None, allowed_gestures=None):
         """识别依赖身体 pose landmarks 的动作。
 
         后续新增身体姿势时，可以继续在这里按优先级追加：
@@ -457,37 +474,37 @@ class GestureClassifier:
         """
         covering_face = self._covering_face_debug(pose_result, hand_landmarks)
 
-        if is_gesture_enabled("Covering Face") and covering_face["matched"]:
+        if self._can_recognize_gesture("Covering Face", allowed_gestures) and covering_face["matched"]:
             return "Covering Face"
 
-        covering_mouth = self._covering_mouth_debug(pose_result, hand_landmarks)
+        covering_mouth = self._covering_mouth_debug(pose_result, hand_landmarks, allowed_gestures)
 
-        if is_gesture_enabled("Covering Mouth") and covering_mouth["matched"]:
+        if self._can_recognize_gesture("Covering Mouth", allowed_gestures) and covering_mouth["matched"]:
             return "Covering Mouth"
 
-        touching_chin = self._touching_chin_debug(pose_result, hand_landmarks)
+        touching_chin = self._touching_chin_debug(pose_result, hand_landmarks, allowed_gestures)
 
-        if is_gesture_enabled("Touching Chin") and touching_chin["matched"]:
+        if self._can_recognize_gesture("Touching Chin", allowed_gestures) and touching_chin["matched"]:
             return "Touching Chin"
 
         hands_on_head = self._hands_on_head_debug(pose_result)
 
-        if is_gesture_enabled("Hands On Head") and hands_on_head["matched"]:
+        if self._can_recognize_gesture("Hands On Head", allowed_gestures) and hands_on_head["matched"]:
             return "Hands On Head"
 
         touching_hair = self._touching_hair_debug(pose_result)
 
-        if is_gesture_enabled("Touching Hair") and touching_hair["matched"]:
+        if self._can_recognize_gesture("Touching Hair", allowed_gestures) and touching_hair["matched"]:
             return "Touching Hair"
 
         head_shaking = self._head_shaking_debug(pose_result)
 
-        if is_gesture_enabled("Head Shaking") and head_shaking["matched"]:
+        if self._can_recognize_gesture("Head Shaking", allowed_gestures) and head_shaking["matched"]:
             return "Head Shaking"
 
         head_tilt = self._head_tilt_debug(pose_result)
 
-        if is_gesture_enabled("Head Tilting") and head_tilt["matched"]:
+        if self._can_recognize_gesture("Head Tilting", allowed_gestures) and head_tilt["matched"]:
             return "Head Tilting"
 
         return None
@@ -568,7 +585,7 @@ class GestureClassifier:
             ),
         )
 
-    def _covering_mouth_debug(self, pose_result, hand_landmarks=None):
+    def _covering_mouth_debug(self, pose_result, hand_landmarks=None, allowed_gestures=None):
         """判断 Covering Mouth：手部候选点靠近嘴部区域，并排除合掌动作的干扰。"""
         if self._has_two_complete_hands(hand_landmarks):
             return {
@@ -579,7 +596,7 @@ class GestureClassifier:
 
         palms_together = self._palms_together_debug(hand_landmarks or [])
 
-        if is_gesture_enabled("Pressing Palms Together") and palms_together["matched"]:
+        if self._can_recognize_gesture("Pressing Palms Together", allowed_gestures) and palms_together["matched"]:
             return {
                 "matched": False,
                 "reason": "blockedByPalmsTogether",
@@ -594,7 +611,7 @@ class GestureClassifier:
             require_above_target=True,
         )
 
-    def _touching_chin_debug(self, pose_result, hand_landmarks=None):
+    def _touching_chin_debug(self, pose_result, hand_landmarks=None, allowed_gestures=None):
         """判断 Touching Chin：任意一只手的手腕、手掌或手指靠近估算的下巴区域。"""
         if self._has_two_complete_hands(hand_landmarks):
             return {
@@ -611,7 +628,7 @@ class GestureClassifier:
 
         palms_together = self._palms_together_debug(hand_landmarks or [])
 
-        if is_gesture_enabled("Pressing Palms Together") and palms_together["matched"]:
+        if self._can_recognize_gesture("Pressing Palms Together", allowed_gestures) and palms_together["matched"]:
             return {
                 "matched": False,
                 "reason": "blockedByPalmsTogether",
@@ -620,7 +637,7 @@ class GestureClassifier:
 
         clasped_hands = self._clasped_hands_debug(hand_landmarks or [])
 
-        if is_gesture_enabled("Clasping Hands") and clasped_hands["matched"]:
+        if self._can_recognize_gesture("Clasping Hands", allowed_gestures) and clasped_hands["matched"]:
             return {
                 "matched": False,
                 "reason": "blockedByClaspingHands",

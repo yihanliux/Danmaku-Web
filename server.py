@@ -83,7 +83,10 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         """处理手势识别请求：读取前端传来的摄像头帧，返回动作识别结果。"""
         try:
             data = self.read_json_body()
-            result = gesture_classifier.classify_frame(data.get("image", ""))
+            result = gesture_classifier.classify_frame(
+                data.get("image", ""),
+                allowed_gestures=data.get("allowedGestures"),
+            )
         except Exception as error:
             self.send_json(400, {
                 "ok": False,

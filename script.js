@@ -51,11 +51,18 @@ const danmakuSpeedValue = document.getElementById("danmakuSpeedValue");
 const danmakuForm = document.getElementById("danmakuForm");
 const danmakuInput = document.getElementById("danmakuInput");
 const danmakuSendButton = document.getElementById("danmakuSendButton");
+const danmakuSendDefaultText = danmakuSendButton.querySelector(".typing-send-default");
+const danmakuSendHoverText = danmakuSendButton.querySelector(".typing-send-hover-content span");
 const shortcutsButtons = document.querySelector(".shortcuts-buttons");
 const shortcutsPanel = document.querySelector(".shortcuts-panel");
+const gesturePanel = document.querySelector(".gesture-panel");
+const gestureContent = document.querySelector(".gesture-content");
 const shortcutTitle = document.querySelector(".shortcuts-title");
 const shortcutSetupHint = document.getElementById("shortcutSetupHint");
+const gestureTitle = document.getElementById("gestureTitle");
+const gestureSetupHint = document.getElementById("gestureSetupHint");
 const shortcutConfirmButton = document.getElementById("shortcutConfirmButton");
+const gestureConfirmButton = document.getElementById("gestureConfirmButton");
 const shortcutLanguageButton = document.getElementById("shortcutLanguageButton");
 const shortcutLanguageText = document.getElementById("shortcutLanguageText");
 const shortcutDialog = document.getElementById("shortcutDialog");
@@ -84,6 +91,17 @@ const SHORTCUT_GROUP_SEND_ICONS = {
   P: "src/Send_P.png",
   N: "src/Send_N.png",
   I: "src/Send_I.png",
+};
+
+const PLAYER_I18N = {
+  zh: {
+    danmakuInputPlaceholder: "发个友善的弹幕见证当下",
+    danmakuSend: "发送",
+  },
+  en: {
+    danmakuInputPlaceholder: "Comment on this moment",
+    danmakuSend: "Send",
+  },
 };
 
 const MAX_SELECTED_SHORTCUTS = 6;
@@ -232,11 +250,14 @@ let cameraStream = null;
 let gestureTimer = null;
 let shortcutAddButton = null;
 let isShortcutSetupMode = true;
+let isGestureSetupMode = true;
 let currentShortcutLanguage = "zh";
 let isGestureRequestRunning = false;
 let currentHeldGesture = null;
 let currentHeldGestureStartedAt = 0;
+const selectedGestureDanmakuByGesture = new Map();
 const lastGestureTriggerTimes = new Map();
+const gestureCooldownTimers = new Map();
 
 function hideCameraStatusIfPreviewHasFrame() {
   if (!cameraPreview.srcObject || cameraPreview.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
@@ -389,7 +410,9 @@ function hasSelectedVideo() {
 }
 
 function canStartVideoPlayback() {
-  return hasSelectedVideo() && (!isOnDeviceShortcutCondition() || !isShortcutSetupMode);
+  return hasSelectedVideo()
+    && (!isOnDeviceShortcutCondition() || !isShortcutSetupMode)
+    && (!isGestureTriggeredCondition() || !isGestureSetupMode);
 }
 
 function updatePlaybackAvailability() {
@@ -768,8 +791,15 @@ function sendParticipantDanmakuText(text, sendMethod = "type") {
 
 function sendShortcutDanmaku(event) {
   const button = event.currentTarget;
-  const text = button.dataset.danmakuText || button.textContent.trim();
+  const text = getDanmakuButtonText(button);
   sendParticipantDanmakuText(text, "shortcut");
+}
+
+function getDanmakuButtonText(button) {
+  return button?.dataset.danmakuText
+    || button?.querySelector(".shortcut-default-text")?.textContent.trim()
+    || button?.textContent.trim()
+    || "";
 }
 
 function getShortcutRows() {
@@ -806,8 +836,16 @@ function getShortcutDialogTitle(addButton) {
   return getShortcutLocale().dialogDefaultTitle;
 }
 
+function applyPlayerLanguage() {
+  const locale = PLAYER_I18N[currentShortcutLanguage] || PLAYER_I18N.en;
+  danmakuInput.placeholder = locale.danmakuInputPlaceholder;
+  danmakuSendDefaultText.textContent = locale.danmakuSend;
+  danmakuSendHoverText.textContent = locale.danmakuSend;
+}
+
 function applyShortcutLanguage() {
   const locale = getShortcutLocale();
+  applyPlayerLanguage();
   shortcutLanguageText.textContent = locale.languageLabel;
   shortcutLanguageButton.setAttribute("aria-label", locale.languageAria);
   shortcutConfirmButton.textContent = locale.confirm;
@@ -846,6 +884,10 @@ function applyShortcutLanguage() {
     element.textContent = locale.custom;
   });
 
+  gestureContent?.querySelectorAll(".gesture-custom-button span").forEach((element) => {
+    element.textContent = locale.custom;
+  });
+
   shortcutsButtons.querySelectorAll(".shortcut-button").forEach((button) => {
     if (button.dataset.shortcutCustom === "true") {
       return;
@@ -860,7 +902,22 @@ function applyShortcutLanguage() {
     );
   });
 
+  gestureContent?.querySelectorAll(".gesture-danmaku-button").forEach((button) => {
+    if (button.dataset.shortcutCustom === "true") {
+      return;
+    }
+
+    const originalText = getShortcutButtonOriginalText(button);
+    updateShortcutButtonText(
+      button,
+      currentShortcutLanguage === "zh"
+        ? originalText
+        : SHORTCUT_DANMAKU_TRANSLATIONS[originalText] || originalText,
+    );
+  });
+
   updateShortcutSetupUi();
+  updateGestureSetupUi();
 }
 
 function toggleShortcutLanguage() {
@@ -891,6 +948,45 @@ function updateShortcutSetupUi() {
   shortcutConfirmButton.disabled = !isComplete;
 }
 
+function getGestureCards() {
+  return Array.from(gestureContent?.querySelectorAll(".gesture-card") || []);
+}
+
+function getSelectedGestureCount() {
+  return gestureContent?.querySelectorAll(".gesture-danmaku-button.is-shortcut-selected").length || 0;
+}
+
+function updateGestureSetupUi() {
+  const locale = getShortcutLocale();
+  gesturePanel?.classList.toggle("is-shortcut-setup-mode", isGestureSetupMode);
+  gesturePanel?.classList.toggle("is-shortcut-send-mode", !isGestureSetupMode);
+
+  if (gestureTitle) {
+    gestureTitle.textContent = isGestureSetupMode ? locale.setupTitle : locale.sendTitle;
+  }
+
+  if (gestureSetupHint) {
+    gestureSetupHint.textContent = isGestureSetupMode ? locale.setupHint : locale.sendHint;
+    gestureSetupHint.classList.remove("hidden");
+  }
+
+  if (!gestureConfirmButton) {
+    return;
+  }
+
+  gestureConfirmButton.textContent = locale.confirm;
+  gestureConfirmButton.classList.toggle("hidden", !isGestureSetupMode);
+
+  if (!isGestureSetupMode) {
+    return;
+  }
+
+  const cards = getGestureCards();
+  const selectedCount = getSelectedGestureCount();
+  const isComplete = cards.length > 0 && selectedCount > 0 && selectedCount <= MAX_SELECTED_SHORTCUTS;
+  gestureConfirmButton.disabled = !isComplete;
+}
+
 function selectShortcutButton(button) {
   if (!button) {
     return;
@@ -906,6 +1002,37 @@ function selectShortcutButton(button) {
   button.setAttribute("aria-pressed", String(!isSelected));
 
   updateShortcutSetupUi();
+}
+
+function selectGestureDanmakuButton(button) {
+  if (!button || !isGestureSetupMode) {
+    return;
+  }
+
+  const card = button.closest(".gesture-card");
+  const isSelected = button.classList.contains("is-shortcut-selected");
+
+  if (isSelected) {
+    button.classList.remove("is-shortcut-selected");
+    button.setAttribute("aria-pressed", "false");
+    updateGestureSetupUi();
+    return;
+  }
+
+  const selectedInCard = card?.querySelector(".gesture-danmaku-button.is-shortcut-selected");
+
+  if (!selectedInCard && getSelectedGestureCount() >= MAX_SELECTED_SHORTCUTS) {
+    return;
+  }
+
+  card?.querySelectorAll(".gesture-danmaku-button.is-shortcut-selected").forEach((selectedButton) => {
+    selectedButton.classList.remove("is-shortcut-selected");
+    selectedButton.setAttribute("aria-pressed", "false");
+  });
+
+  button.classList.add("is-shortcut-selected");
+  button.setAttribute("aria-pressed", "true");
+  updateGestureSetupUi();
 }
 
 function confirmShortcutSetup() {
@@ -937,6 +1064,40 @@ function confirmShortcutSetup() {
 
   isShortcutSetupMode = false;
   updateShortcutSetupUi();
+  updatePlaybackAvailability();
+}
+
+function confirmGestureSetup() {
+  if (!gestureConfirmButton || gestureConfirmButton.disabled) {
+    return;
+  }
+
+  selectedGestureDanmakuByGesture.clear();
+
+  getGestureCards().forEach((card) => {
+    const selectedButton = card.querySelector(".gesture-danmaku-button.is-shortcut-selected");
+
+    if (!selectedButton) {
+      card.remove();
+      return;
+    }
+
+    card.querySelectorAll(".gesture-danmaku-button").forEach((button) => {
+      if (button !== selectedButton) {
+        button.remove();
+        return;
+      }
+
+      selectedGestureDanmakuByGesture.set(card.dataset.gesture, getDanmakuButtonText(button));
+      button.classList.remove("is-shortcut-selected");
+      button.removeAttribute("aria-pressed");
+    });
+
+    card.querySelector(".gesture-custom-button")?.remove();
+  });
+
+  isGestureSetupMode = false;
+  updateGestureSetupUi();
   updatePlaybackAvailability();
 }
 
@@ -1007,15 +1168,26 @@ function submitShortcutDialog(event) {
 
   if (shortcutAddButton) {
     const row = shortcutAddButton.closest(".shortcut-context-row");
-    const group = shortcutAddButton.dataset.shortcutGroup || row?.dataset.shortcutGroup || "P";
-    row?.querySelectorAll('.shortcut-button[data-shortcut-custom="true"]').forEach((button) => {
+    const gestureCard = shortcutAddButton.closest(".gesture-card");
+    const container = row || gestureCard;
+    const group = shortcutAddButton.dataset.shortcutGroup
+      || container?.dataset.shortcutGroup
+      || "P";
+
+    container?.querySelectorAll('.shortcut-button[data-shortcut-custom="true"]').forEach((button) => {
       button.remove();
     });
 
     const newButton = createShortcutButton(trimmedText, group, { isCustom: true });
+    if (gestureCard) {
+      newButton.classList.add("gesture-danmaku-button");
+    }
+
     shortcutAddButton.before(newButton);
 
-    if (isShortcutSetupMode) {
+    if (gestureCard && isGestureSetupMode) {
+      selectGestureDanmakuButton(newButton);
+    } else if (isShortcutSetupMode) {
       selectShortcutButton(newButton);
     }
   }
@@ -1048,6 +1220,56 @@ function handleShortcutButtonsClick(event) {
     }
 
     sendShortcutDanmaku({ currentTarget: shortcutButton });
+  }
+}
+
+function initializeGestureContextIcons() {
+  const contextIcons = {
+    得分: "src/得分.png",
+    失分: "src/失分.png",
+    嘲讽: "src/嘲讽.png",
+    质疑: "src/质疑.png",
+    等待: "src/等待.png",
+    疑惑: "src/疑惑.png",
+  };
+
+  getGestureCards().forEach((card) => {
+    const contextKey = card.dataset.context || "";
+    const label = card.querySelector(".gesture-context-label");
+    const iconSrc = contextIcons[contextKey];
+
+    if (!label || !iconSrc || label.querySelector(".shortcut-context-icon")) {
+      return;
+    }
+
+    label.textContent = "";
+
+    const icon = document.createElement("img");
+    icon.className = "shortcut-context-icon";
+    icon.src = iconSrc;
+    icon.alt = "";
+
+    label.append(icon, contextKey);
+  });
+}
+
+function handleGestureContentClick(event) {
+  const addButton = event.target.closest(".gesture-custom-button");
+
+  if (addButton && gestureContent?.contains(addButton)) {
+    addTemporaryShortcutButton(addButton);
+    return;
+  }
+
+  const gestureButton = event.target.closest(".gesture-danmaku-button");
+
+  if (!gestureButton || !gestureContent?.contains(gestureButton)) {
+    return;
+  }
+
+  if (isGestureSetupMode) {
+    selectGestureDanmakuButton(gestureButton);
+    return;
   }
 }
 
@@ -1353,7 +1575,7 @@ function updateDanmakuControls() {
   }
 
   danmakuInput.disabled = false;
-  danmakuInput.placeholder = "Comment on this moment";
+  applyPlayerLanguage();
 
   updateDanmakuSendButton();
 }
@@ -1460,6 +1682,7 @@ function stopGestureRecognition() {
 
   gestureStatus.classList.add("hidden");
   gestureResult.classList.add("hidden");
+  clearGestureCardCooldowns();
   resetGestureHoldState();
   clearHandLandmarks();
 }
@@ -1470,6 +1693,7 @@ function stopGestureRecognition() {
 */
 function shouldRecognizeGestures() {
   return isGestureTriggeredCondition()
+    && !isGestureSetupMode
     && Boolean(selectedVideoFileName)
     && !videoPlayer.paused
     && !videoPlayer.ended
@@ -1516,6 +1740,7 @@ async function detectGestureFromCamera() {
       },
       body: JSON.stringify({
         image: canvas.toDataURL("image/jpeg", 0.7),
+        allowedGestures: getAllowedGestureNames(),
       }),
     });
 
@@ -1559,14 +1784,14 @@ function sendGestureDanmaku(result) {
     return { sent: false, reason: "noGesture" };
   }
 
-  const text = result.danmakuText;
+  const gesture = result.gesture;
+  const text = getSelectedGestureDanmakuText(gesture);
 
   if (!text) {
     resetGestureHoldState();
     return { sent: false, reason: "noText" };
   }
 
-  const gesture = result.gesture;
   const rule = result.sendRule || {};
   const now = Date.now();
   const holdMilliseconds = secondsToMilliseconds(rule.holdSeconds);
@@ -1603,7 +1828,67 @@ function sendGestureDanmaku(result) {
 
   lastGestureTriggerTimes.set(gesture, now);
   sendParticipantDanmakuText(text, "gesture");
-  return { sent: true, gesture };
+  return { sent: true, gesture, danmakuText: text, cooldownMilliseconds };
+}
+
+function getSelectedGestureDanmakuText(gesture) {
+  if (selectedGestureDanmakuByGesture.has(gesture)) {
+    return selectedGestureDanmakuByGesture.get(gesture) || "";
+  }
+
+  const card = getGestureCards().find((gestureCard) => gestureCard.dataset.gesture === gesture);
+  const button = card?.querySelector(".gesture-danmaku-button");
+  return getDanmakuButtonText(button);
+}
+
+function getAllowedGestureNames() {
+  if (!isGestureSetupMode && selectedGestureDanmakuByGesture.size > 0) {
+    return Array.from(selectedGestureDanmakuByGesture.keys());
+  }
+
+  return getGestureCards()
+    .map((card) => card.dataset.gesture)
+    .filter(Boolean);
+}
+
+function showGestureCardCooldown(gesture, milliseconds) {
+  const duration = Number(milliseconds);
+
+  if (!gesture || !Number.isFinite(duration) || duration <= 0) {
+    return;
+  }
+
+  const card = getGestureCards().find((gestureCard) => gestureCard.dataset.gesture === gesture);
+
+  if (!card) {
+    return;
+  }
+
+  card.classList.add("is-gesture-cooling");
+
+  const previousTimer = gestureCooldownTimers.get(gesture);
+
+  if (previousTimer) {
+    window.clearTimeout(previousTimer);
+  }
+
+  const timer = window.setTimeout(() => {
+    card.classList.remove("is-gesture-cooling");
+    gestureCooldownTimers.delete(gesture);
+  }, duration);
+
+  gestureCooldownTimers.set(gesture, timer);
+}
+
+function clearGestureCardCooldowns() {
+  gestureCooldownTimers.forEach((timer) => {
+    window.clearTimeout(timer);
+  });
+  gestureCooldownTimers.clear();
+
+  getGestureCards().forEach((card) => {
+    card.classList.remove("is-gesture-cooling");
+  });
 }
 
 /*
@@ -1632,8 +1917,9 @@ function updateGestureResult(result, sendState = {}) {
   }
 
   if (sendState.sent) {
-    gestureResult.textContent = `Sent danmaku: ${result.danmakuText}`;
+    gestureResult.textContent = `Sent danmaku: ${sendState.danmakuText}`;
     gestureResult.classList.remove("hidden");
+    showGestureCardCooldown(sendState.gesture, sendState.cooldownMilliseconds);
     return;
   }
 
@@ -1646,6 +1932,7 @@ function updateGestureResult(result, sendState = {}) {
   if (sendState.reason === "cooldown") {
     gestureResult.textContent = `${result.gesture} cooldown: ${formatSeconds(sendState.cooldownRemainingMilliseconds)}`;
     gestureResult.classList.remove("hidden");
+    showGestureCardCooldown(result.gesture, sendState.cooldownRemainingMilliseconds);
     return;
   }
 
@@ -1993,6 +2280,8 @@ danmakuSendButton.addEventListener("click", sendDanmaku);
 
 shortcutsButtons.addEventListener("click", handleShortcutButtonsClick);
 shortcutConfirmButton.addEventListener("click", confirmShortcutSetup);
+gestureContent?.addEventListener("click", handleGestureContentClick);
+gestureConfirmButton?.addEventListener("click", confirmGestureSetup);
 shortcutLanguageButton.addEventListener("click", toggleShortcutLanguage);
 shortcutDialogForm.addEventListener("submit", submitShortcutDialog);
 shortcutDialogCancel.addEventListener("click", closeShortcutDialog);
@@ -2016,5 +2305,6 @@ resetControls();
 updateDanmakuControls();
 initializeDanmakuSettingsFromCss();
 updateDanmakuAnimationState();
+initializeGestureContextIcons();
 applyShortcutLanguage();
 applyExperimentCondition();
