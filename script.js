@@ -1540,15 +1540,34 @@ function mergeDanmakuRecords(records) {
   const existingIds = new Set(danmakuRecords.map((record) => record.id));
 
   records.forEach((record) => {
-    if (!record.id || existingIds.has(record.id)) {
+    const normalizedRecord = normalizeDanmakuRecord(record);
+
+    if (!normalizedRecord || existingIds.has(normalizedRecord.id)) {
       return;
     }
 
-    danmakuRecords.push(record);
-    existingIds.add(record.id);
+    danmakuRecords.push(normalizedRecord);
+    existingIds.add(normalizedRecord.id);
   });
 
   danmakuRecords.sort((first, second) => first.time - second.time);
+}
+
+/* 预置弹幕只保留播放需要的字段，避免依赖 createdAt 等元数据。 */
+function normalizeDanmakuRecord(record) {
+  const time = Number(record?.time);
+  const text = typeof record?.text === "string" ? record.text : "";
+
+  if (!record?.id || !text || !Number.isFinite(time)) {
+    return null;
+  }
+
+  return {
+    id: String(record.id),
+    text,
+    time,
+    style: typeof record.style === "string" ? record.style : "default",
+  };
 }
 
 /*
