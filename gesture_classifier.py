@@ -101,7 +101,7 @@ HEAD_SHAKE_WINDOW_SECONDS = 3
 HEAD_SHAKE_MIN_SAMPLES = 6
 HEAD_SHAKE_YAW_THRESHOLD = 0.035
 HEAD_SHAKE_RANGE_THRESHOLD = 0.09
-HEAD_SHAKE_MIN_DIRECTION_CHANGES = 3
+HEAD_SHAKE_MIN_DIRECTION_CHANGES = 4
 
 # Covering Face / Covering Mouth 使用的距离都不是像素距离，而是归一化距离。
 # 归一化使用的尺度是 face_scale：
@@ -157,6 +157,14 @@ FACE_COVER_ABOVE_TARGET_THRESHOLD = -0.3
 # 值越大：越宽松，如果真实捂眼/捂嘴时手指或手腕经常偏低，可以适当调大。
 FACE_COVER_BELOW_TARGET_THRESHOLD = 0.3
 MOUTH_COVER_ABOVE_TARGET_THRESHOLD = -0.02
+MOUTH_COVER_DISTANCE_THRESHOLD = 0.62
+MOUTH_COVER_VERY_CLOSE_THRESHOLD = 0.42
+MOUTH_COVER_HORIZONTAL_THRESHOLD = 1.05
+MOUTH_COVER_VERTICAL_ABOVE_THRESHOLD = -0.55
+MOUTH_COVER_VERTICAL_BELOW_THRESHOLD = 0.45
+MOUTH_COVER_MIN_POINTS = 2
+MOUTH_COVER_MIN_CORE_POINTS = 1
+MOUTH_COVER_CORE_POINTS = (THUMB_TIP, INDEX_TIP, INDEX_MCP, MIDDLE_MCP, MIDDLE_TIP)
 
 # “眼睛/嘴巴可能被遮挡”的 visibility 阈值。
 # 如果目标区域 landmarks 的最小 visibility <= 这个值，
@@ -172,15 +180,24 @@ CHIN_CENTER_VERTICAL_OFFSET = 0.55
 
 # 手部候选点到估算下巴中心的最大归一化距离。
 CHIN_TOUCH_DISTANCE_THRESHOLD = 0.65
+CHIN_TOUCH_RELAXED_DISTANCE_THRESHOLD = 1.2
+CHIN_TOUCH_SUPPORT_DISTANCE_THRESHOLD = 0.92
+CHIN_TOUCH_SUPPORT_CONTACT_THRESHOLD = 0.65
+CHIN_TOUCH_MIN_SUPPORT_POINTS = 3
 
 # 手部候选点相对下巴中心允许的最大横向偏移。
 CHIN_TOUCH_HORIZONTAL_THRESHOLD = 0.75
 
 # 手部候选点相对下巴中心允许的最大纵向偏移。
 CHIN_TOUCH_VERTICAL_THRESHOLD = 0.55
+CHIN_TOUCH_RELAXED_VERTICAL_THRESHOLD = 1.1
 
 # 手部候选点至少需要位于嘴巴中心下方多少，避免捂嘴被判定为摸下巴。
 CHIN_TOUCH_MIN_BELOW_MOUTH = 0.15
+CHIN_TOUCH_PALM_MIN_BELOW_MOUTH = 0.35
+CHIN_TWO_HAND_CLOSE_DISTANCE_THRESHOLD = 1.65
+CHIN_MOUTH_BLOCK_DISTANCE_THRESHOLD = 0.62
+CHIN_MOUTH_BLOCK_MAX_BELOW_MOUTH = 0.35
 
 # Touching Hair / Hands On Head 使用下面这组头部接触阈值。
 # 它们也会用类似 face_scale 的头部尺度做归一化。
@@ -587,39 +604,6 @@ class GestureClassifier:
 
     def _covering_mouth_debug(self, pose_result, hand_landmarks=None, allowed_gestures=None):
         """判断 Covering Mouth：手部候选点靠近嘴部区域，并排除合掌动作的干扰。"""
-        if self._has_two_complete_hands(hand_landmarks):
-            return {
-                "matched": False,
-                "reason": "blockedByTwoCompleteHands",
-                "handCount": len(hand_landmarks or []),
-            }
-
-        palms_together = self._palms_together_debug(hand_landmarks or [])
-
-        if self._can_recognize_gesture("Pressing Palms Together", allowed_gestures) and palms_together["matched"]:
-            return {
-                "matched": False,
-                "reason": "blockedByPalmsTogether",
-                "palmsTogether": palms_together,
-            }
-
-        return self._face_region_cover_debug(
-            pose_result,
-            hand_landmarks,
-            region_name="mouth",
-            region_indices=(MOUTH_LEFT, MOUTH_RIGHT),
-            require_above_target=True,
-        )
-
-    def _touching_chin_debug(self, pose_result, hand_landmarks=None, allowed_gestures=None):
-        """判断 Touching Chin：任意一只手的手腕、手掌或手指靠近估算的下巴区域。"""
-        if self._has_two_complete_hands(hand_landmarks):
-            return {
-                "matched": False,
-                "reason": "blockedByTwoCompleteHands",
-                "handCount": len(hand_landmarks or []),
-            }
-
         if not pose_result.pose_landmarks:
             return {
                 "matched": False,
@@ -628,7 +612,7 @@ class GestureClassifier:
 
         palms_together = self._palms_together_debug(hand_landmarks or [])
 
-        if self._can_recognize_gesture("Pressing Palms Together", allowed_gestures) and palms_together["matched"]:
+        if palms_together["matched"]:
             return {
                 "matched": False,
                 "reason": "blockedByPalmsTogether",
@@ -637,11 +621,20 @@ class GestureClassifier:
 
         clasped_hands = self._clasped_hands_debug(hand_landmarks or [])
 
-        if self._can_recognize_gesture("Clasping Hands", allowed_gestures) and clasped_hands["matched"]:
+        if clasped_hands["matched"]:
             return {
                 "matched": False,
                 "reason": "blockedByClaspingHands",
                 "claspedHands": clasped_hands,
+            }
+
+        two_hands_close = self._chin_two_hands_close_debug(hand_landmarks or [])
+
+        if two_hands_close["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByTwoHandsClose",
+                "twoHandsClose": two_hands_close,
             }
 
         landmarks = pose_result.pose_landmarks[0]
@@ -660,6 +653,105 @@ class GestureClassifier:
 
         face_scale = self._face_scale(landmarks)
         mouth_center = self._average_point(mouth_points)
+        mouth_targets = (
+            mouth_center,
+            mouth_points[0],
+            mouth_points[1],
+            SimpleNamespace(
+                x=mouth_center.x,
+                y=mouth_center.y - face_scale * 0.18,
+                z=mouth_center.z,
+            ),
+            SimpleNamespace(
+                x=mouth_center.x,
+                y=mouth_center.y + face_scale * 0.18,
+                z=mouth_center.z,
+            ),
+        )
+        hand_cover = self._mouth_cover_hand_debug(
+            hand_landmarks,
+            mouth_targets,
+            mouth_center,
+            face_scale,
+        )
+
+        return {
+            "matched": hand_cover["covering"],
+            "reason": None if hand_cover["covering"] else hand_cover["reason"],
+            "region": "mouth",
+            "handLandmarkCovering": hand_cover["covering"],
+            "handNearRegion": hand_cover["hitCount"] > 0,
+            "handInFaceZone": bool(hand_cover.get("best", {}).get("inHorizontalBand")),
+            "palmsTogether": palms_together,
+            "claspedHands": clasped_hands,
+            "twoHandsClose": two_hands_close,
+            "handLandmark": hand_cover,
+            "faceScale": face_scale,
+            "mouthCenter": self._point_debug(mouth_center),
+            "mouthTargets": [self._point_debug(point) for point in mouth_targets],
+            "visibility": mouth_visibility,
+        }
+
+    def _touching_chin_debug(self, pose_result, hand_landmarks=None, allowed_gestures=None):
+        """判断 Touching Chin：任意一只手的手腕、手掌或手指靠近估算的下巴区域。"""
+        if not pose_result.pose_landmarks:
+            return {
+                "matched": False,
+                "reason": "noPose",
+            }
+
+        landmarks = pose_result.pose_landmarks[0]
+        mouth_points = [landmarks[MOUTH_LEFT], landmarks[MOUTH_RIGHT]]
+        mouth_visibility = {
+            "mouthLeft": self._pose_visibility(landmarks[MOUTH_LEFT]),
+            "mouthRight": self._pose_visibility(landmarks[MOUTH_RIGHT]),
+        }
+
+        if not all(self._pose_landmark_visible(point) for point in mouth_points):
+            return {
+                "matched": False,
+                "reason": "missingMouthLandmarks",
+                "visibility": mouth_visibility,
+            }
+
+        face_scale = self._face_scale(landmarks)
+        mouth_center = self._average_point(mouth_points)
+        chin_center = SimpleNamespace(
+            x=mouth_center.x,
+            y=mouth_center.y + face_scale * CHIN_CENTER_VERTICAL_OFFSET,
+            z=mouth_center.z,
+        )
+
+        palms_together = self._palms_together_debug(hand_landmarks or [])
+        if palms_together["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByPalmsTogether",
+                "palmsTogether": palms_together,
+                "mouthCenter": self._point_debug(mouth_center),
+                "chinCenter": self._point_debug(chin_center),
+            }
+
+        clasped_hands = self._clasped_hands_debug(hand_landmarks or [])
+        if clasped_hands["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByClaspingHands",
+                "claspedHands": clasped_hands,
+                "mouthCenter": self._point_debug(mouth_center),
+                "chinCenter": self._point_debug(chin_center),
+            }
+
+        close_two_hands = self._chin_two_hands_close_debug(hand_landmarks or [])
+        if close_two_hands["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByTwoHandsClose",
+                "twoHandsClose": close_two_hands,
+                "mouthCenter": self._point_debug(mouth_center),
+                "chinCenter": self._point_debug(chin_center),
+            }
+
         mouth_cover_candidate = self._face_region_cover_debug(
             pose_result,
             hand_landmarks,
@@ -676,11 +768,17 @@ class GestureClassifier:
                 "visibility": mouth_visibility,
             }
 
-        chin_center = SimpleNamespace(
-            x=mouth_center.x,
-            y=mouth_center.y + face_scale * CHIN_CENTER_VERTICAL_OFFSET,
-            z=mouth_center.z,
-        )
+        mouth_blocker = self._chin_mouth_blocker_debug(hand_landmarks or [], mouth_center, face_scale)
+        if mouth_blocker["matched"]:
+            return {
+                "matched": False,
+                "reason": "blockedByHandNearMouth",
+                "mouthBlocker": mouth_blocker,
+                "visibility": mouth_visibility,
+                "mouthCenter": self._point_debug(mouth_center),
+                "chinCenter": self._point_debug(chin_center),
+            }
+
         left_debug = self._pose_wrist_chin_debug(
             landmarks[LEFT_WRIST_POSE],
             mouth_center,
@@ -714,10 +812,78 @@ class GestureClassifier:
             "left": left_debug,
             "right": right_debug,
             "handLandmark": hand_landmark_debug,
+            "palmsTogether": palms_together,
+            "claspedHands": clasped_hands,
+            "twoHandsClose": close_two_hands,
+            "mouthBlocker": mouth_blocker,
             "faceScale": face_scale,
             "mouthCenter": self._point_debug(mouth_center),
             "chinCenter": self._point_debug(chin_center),
             "chinCenterVerticalOffset": CHIN_CENTER_VERTICAL_OFFSET,
+        }
+
+    def _chin_two_hands_close_debug(self, hand_landmarks):
+        if not self._has_two_complete_hands(hand_landmarks):
+            return {
+                "matched": False,
+                "reason": "needTwoHands",
+                "handCount": len(hand_landmarks or []),
+            }
+
+        first_hand = hand_landmarks[0]
+        second_hand = hand_landmarks[1]
+        average_scale = (self._hand_scale(first_hand) + self._hand_scale(second_hand)) / 2
+        first_center = self._average_point([first_hand[index] for index in (WRIST, INDEX_MCP, MIDDLE_MCP, PINKY_MCP)])
+        second_center = self._average_point([second_hand[index] for index in (WRIST, INDEX_MCP, MIDDLE_MCP, PINKY_MCP)])
+        center_distance = self._distance_2d(first_center, second_center) / (average_scale or 1)
+        matched = center_distance <= CHIN_TWO_HAND_CLOSE_DISTANCE_THRESHOLD
+
+        return {
+            "matched": matched,
+            "reason": "matched" if matched else "handsNotClose",
+            "centerDistance": center_distance,
+            "centerDistanceThreshold": CHIN_TWO_HAND_CLOSE_DISTANCE_THRESHOLD,
+            "firstCenter": self._point_debug(first_center),
+            "secondCenter": self._point_debug(second_center),
+        }
+
+    def _chin_mouth_blocker_debug(self, hand_landmarks, mouth_center, face_scale):
+        candidates = []
+
+        for hand_index, landmarks in enumerate(hand_landmarks or []):
+            for point_index in FACE_COVER_HAND_POINTS:
+                if point_index < len(landmarks):
+                    point = landmarks[point_index]
+                    distance_to_mouth = self._distance_2d(point, mouth_center) / (face_scale or 1)
+                    below_mouth_distance = (point.y - mouth_center.y) / (face_scale or 1)
+                    matched = (
+                        distance_to_mouth <= CHIN_MOUTH_BLOCK_DISTANCE_THRESHOLD
+                        and below_mouth_distance <= CHIN_MOUTH_BLOCK_MAX_BELOW_MOUTH
+                    )
+                    candidates.append({
+                        "handIndex": hand_index,
+                        "pointIndex": point_index,
+                        "matched": matched,
+                        "distanceToMouth": distance_to_mouth,
+                        "distanceThreshold": CHIN_MOUTH_BLOCK_DISTANCE_THRESHOLD,
+                        "belowMouthDistance": below_mouth_distance,
+                        "maxBelowMouth": CHIN_MOUTH_BLOCK_MAX_BELOW_MOUTH,
+                    })
+
+        if not candidates:
+            return {
+                "matched": False,
+                "reason": "noHandLandmarks",
+            }
+
+        best = min(candidates, key=lambda candidate: candidate["distanceToMouth"])
+        matched = any(candidate["matched"] for candidate in candidates)
+
+        return {
+            "matched": matched,
+            "reason": "matched" if matched else "notNearMouth",
+            "best": best,
+            "candidates": candidates,
         }
 
     def _pose_wrist_chin_debug(self, wrist, mouth_center, chin_center, face_scale):
@@ -736,17 +902,16 @@ class GestureClassifier:
         candidates = []
 
         for hand_index, landmarks in enumerate(hand_landmarks or []):
-            for point_index in FACE_COVER_HAND_POINTS:
-                if point_index < len(landmarks):
-                    candidate = self._chin_point_debug(
-                        landmarks[point_index],
+            if len(landmarks) >= 21:
+                candidates.append(
+                    self._chin_hand_candidate_debug(
+                        hand_index,
+                        landmarks,
                         mouth_center,
                         chin_center,
                         face_scale,
                     )
-                    candidate["handIndex"] = hand_index
-                    candidate["pointIndex"] = point_index
-                    candidates.append(candidate)
+                )
 
         if not candidates:
             return {
@@ -754,7 +919,62 @@ class GestureClassifier:
                 "reason": "noHandLandmarks",
             }
 
-        return min(candidates, key=lambda candidate: candidate["distanceToChin"])
+        best = max(candidates, key=lambda candidate: candidate["score"])
+
+        return {
+            "touching": best["touching"],
+            "reason": best["reason"],
+            "best": best,
+            "candidates": candidates,
+        }
+
+    def _chin_hand_candidate_debug(self, hand_index, landmarks, mouth_center, chin_center, face_scale):
+        palm_points = [landmarks[index] for index in (WRIST, INDEX_MCP, MIDDLE_MCP, PINKY_MCP)]
+        palm_center = self._average_point(palm_points)
+        palm_debug = self._chin_point_debug(palm_center, mouth_center, chin_center, face_scale)
+        support_debug = []
+
+        for point_index in FACE_COVER_HAND_POINTS:
+            if point_index < len(landmarks):
+                point_debug = self._chin_point_debug(landmarks[point_index], mouth_center, chin_center, face_scale)
+                point_debug["pointIndex"] = point_index
+                support_debug.append(point_debug)
+
+        support_hits = [
+            item for item in support_debug
+            if item["distanceToChin"] <= CHIN_TOUCH_SUPPORT_DISTANCE_THRESHOLD
+            and item["belowMouthDistance"] >= CHIN_TOUCH_MIN_BELOW_MOUTH
+        ]
+        nearest_support = min(support_debug, key=lambda item: item["distanceToChin"])
+        strict_palm_contact = palm_debug["touching"]
+        support_contact = (
+            len(support_hits) >= CHIN_TOUCH_MIN_SUPPORT_POINTS
+            and nearest_support["distanceToChin"] <= CHIN_TOUCH_SUPPORT_CONTACT_THRESHOLD
+            and palm_debug["distanceToChin"] <= CHIN_TOUCH_RELAXED_DISTANCE_THRESHOLD
+            and palm_debug["verticalDistance"] <= CHIN_TOUCH_RELAXED_VERTICAL_THRESHOLD
+        )
+        checks = {
+            "contact": strict_palm_contact or support_contact,
+            "palmBelowMouth": palm_debug["belowMouthDistance"] >= CHIN_TOUCH_PALM_MIN_BELOW_MOUTH,
+            "horizontal": palm_debug["horizontalDistance"] <= CHIN_TOUCH_HORIZONTAL_THRESHOLD,
+        }
+        touching = all(checks.values())
+        failed = [name for name, passed in checks.items() if not passed]
+
+        return {
+            "handIndex": hand_index,
+            "touching": touching,
+            "reason": None if touching else ",".join(failed),
+            "score": sum(1 for passed in checks.values() if passed),
+            "checks": checks,
+            "strictPalmContact": strict_palm_contact,
+            "supportContact": support_contact,
+            "supportHits": len(support_hits),
+            "minSupportHits": CHIN_TOUCH_MIN_SUPPORT_POINTS,
+            "nearestSupport": nearest_support,
+            "palm": palm_debug,
+            "support": support_debug,
+        }
 
     def _chin_point_debug(self, point, mouth_center, chin_center, face_scale):
         """计算一个手部候选点相对下巴区域的距离、方向和命中结果。"""
@@ -779,6 +999,81 @@ class GestureClassifier:
             "verticalThreshold": CHIN_TOUCH_VERTICAL_THRESHOLD,
             "belowMouthDistance": below_mouth_distance,
             "minBelowMouth": CHIN_TOUCH_MIN_BELOW_MOUTH,
+        }
+
+    def _mouth_cover_hand_debug(self, hand_landmarks, target_points, target_center, face_scale):
+        candidates = []
+
+        for hand_index, landmarks in enumerate(hand_landmarks or []):
+            for point_index in FACE_COVER_HAND_POINTS:
+                if point_index < len(landmarks):
+                    nearest_distance = min(
+                        self._distance_2d(landmarks[point_index], target_point)
+                        for target_point in target_points
+                    ) / (face_scale or 1)
+                    horizontal_distance = abs(landmarks[point_index].x - target_center.x) / (face_scale or 1)
+                    signed_vertical_distance = (landmarks[point_index].y - target_center.y) / (face_scale or 1)
+                    near_region = nearest_distance <= MOUTH_COVER_DISTANCE_THRESHOLD
+                    very_close_region = nearest_distance <= MOUTH_COVER_VERY_CLOSE_THRESHOLD
+                    in_horizontal_band = horizontal_distance <= MOUTH_COVER_HORIZONTAL_THRESHOLD
+                    in_vertical_band = (
+                        MOUTH_COVER_VERTICAL_ABOVE_THRESHOLD
+                        <= signed_vertical_distance
+                        <= MOUTH_COVER_VERTICAL_BELOW_THRESHOLD
+                    )
+                    covering = near_region and in_horizontal_band and in_vertical_band
+                    candidates.append({
+                        "covering": covering,
+                        "nearRegion": near_region,
+                        "veryCloseRegion": very_close_region,
+                        "inHorizontalBand": in_horizontal_band,
+                        "inVerticalBand": in_vertical_band,
+                        "handIndex": hand_index,
+                        "pointIndex": point_index,
+                        "nearestDistance": nearest_distance,
+                        "nearestDistanceThreshold": MOUTH_COVER_DISTANCE_THRESHOLD,
+                        "veryCloseThreshold": MOUTH_COVER_VERY_CLOSE_THRESHOLD,
+                        "horizontalDistance": horizontal_distance,
+                        "horizontalThreshold": MOUTH_COVER_HORIZONTAL_THRESHOLD,
+                        "signedVerticalDistance": signed_vertical_distance,
+                        "aboveThreshold": MOUTH_COVER_VERTICAL_ABOVE_THRESHOLD,
+                        "belowThreshold": MOUTH_COVER_VERTICAL_BELOW_THRESHOLD,
+                    })
+
+        if not candidates:
+            return {
+                "covering": False,
+                "reason": "noHandLandmarks",
+                "hitCount": 0,
+                "coreHitCount": 0,
+                "best": {},
+                "candidates": [],
+            }
+
+        hits = [candidate for candidate in candidates if candidate["covering"]]
+        core_hits = [
+            candidate for candidate in hits
+            if candidate["pointIndex"] in MOUTH_COVER_CORE_POINTS
+        ]
+        best = min(candidates, key=lambda candidate: candidate["nearestDistance"])
+        checks = {
+            "coverPointCount": len(hits) >= MOUTH_COVER_MIN_POINTS,
+            "corePointCount": len(core_hits) >= MOUTH_COVER_MIN_CORE_POINTS,
+            "bestVeryClose": best["veryCloseRegion"] or len(hits) >= MOUTH_COVER_MIN_POINTS + 1,
+        }
+        covering = all(checks.values())
+        failed = [name for name, passed in checks.items() if not passed]
+
+        return {
+            "covering": covering,
+            "reason": None if covering else ",".join(failed),
+            "checks": checks,
+            "hitCount": len(hits),
+            "minHitCount": MOUTH_COVER_MIN_POINTS,
+            "coreHitCount": len(core_hits),
+            "minCoreHitCount": MOUTH_COVER_MIN_CORE_POINTS,
+            "best": best,
+            "candidates": candidates,
         }
 
     def _face_region_cover_debug(

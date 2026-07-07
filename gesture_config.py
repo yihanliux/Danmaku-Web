@@ -9,13 +9,10 @@
 
 
 # 同一个动作发送弹幕后，需要等待多少秒才允许再次发送。
-SAME_GESTURE_COOLDOWN_SECONDS = 8
+SAME_GESTURE_COOLDOWN_SECONDS = 10
 
-GESTURE_COOLDOWN_SECONDS = {
-    "Head Shaking": 8,
-    "Covering Mouth": 8,
-    "Touching Chin": 8,
-}
+# 单个动作的特殊冷却时间。当前为空，表示所有手势统一使用 SAME_GESTURE_COOLDOWN_SECONDS。
+GESTURE_COOLDOWN_SECONDS = {}
 
 
 # 动作识别总开关。

@@ -54,6 +54,14 @@
               Your browser does not support the video tag.
             </video>
             <div id="danmakuLayer" class="danmaku-layer" aria-hidden="true"></div>
+            <div id="gestureDebugOverlay" class="gesture-debug-overlay hidden" aria-live="polite"></div>
+            <div class="camera-capture" aria-hidden="true">
+              <video id="cameraPreview" autoplay muted playsinline></video>
+              <canvas id="handLandmarkCanvas" class="hand-landmark-canvas"></canvas>
+              <div id="cameraStatus" class="camera-status">Camera loading...</div>
+              <div id="gestureStatus" class="gesture-status hidden">正在识别手势</div>
+              <div id="gestureResult" class="gesture-result hidden">成功发送弹幕：厉害</div>
+            </div>
             <div id="placeholder" class="placeholder">No video selected</div>
           </div>
         </div>
@@ -368,14 +376,6 @@
             确认
           </button>
         </aside>
-      </div>
-
-      <div class="camera-capture" aria-hidden="true">
-          <video id="cameraPreview" autoplay muted playsinline></video>
-          <canvas id="handLandmarkCanvas" class="hand-landmark-canvas"></canvas>
-          <div id="cameraStatus" class="camera-status">Camera loading...</div>
-          <div id="gestureStatus" class="gesture-status hidden">正在识别手势</div>
-          <div id="gestureResult" class="gesture-result hidden">成功发送弹幕：厉害</div>
       </div>
     </div>
   </main>

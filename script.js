@@ -33,6 +33,7 @@ const handLandmarkCanvas = document.getElementById("handLandmarkCanvas");
 const cameraStatus = document.getElementById("cameraStatus");
 const gestureStatus = document.getElementById("gestureStatus");
 const gestureResult = document.getElementById("gestureResult");
+const gestureDebugOverlay = document.getElementById("gestureDebugOverlay");
 const gestureDebug = document.getElementById("gestureDebug");
 const danmakuLayer = document.getElementById("danmakuLayer");
 const danmakuToggleButton = document.getElementById("danmakuToggleButton");
@@ -105,6 +106,7 @@ const PLAYER_I18N = {
 };
 
 const MAX_SELECTED_SHORTCUTS = 6;
+const CLICK_SHORTCUT_COOLDOWN_SECONDS = 10;
 
 const SHORTCUT_CONTEXTS = {
   得分: {
@@ -255,7 +257,11 @@ let currentShortcutLanguage = "zh";
 let isGestureRequestRunning = false;
 let currentHeldGesture = null;
 let currentHeldGestureStartedAt = 0;
+let currentDetectedGesture = null;
+let currentDetectedGestureStartedAt = 0;
 const selectedGestureDanmakuByGesture = new Map();
+const lastShortcutTriggerTimes = new Map();
+const shortcutCooldownTimers = new Map();
 const lastGestureTriggerTimes = new Map();
 const gestureCooldownTimers = new Map();
 
@@ -772,7 +778,7 @@ function sendDanmaku() {
 */
 function sendParticipantDanmakuText(text, sendMethod = "type") {
   if (!selectedVideoFileName || !text) {
-    return;
+    return false;
   }
 
   const record = {
@@ -787,12 +793,74 @@ function sendParticipantDanmakuText(text, sendMethod = "type") {
     pendingUserDanmaku.push(record);
     showPendingUserDanmaku();
   }
+
+  return true;
 }
 
 function sendShortcutDanmaku(event) {
   const button = event.currentTarget;
   const text = getDanmakuButtonText(button);
-  sendParticipantDanmakuText(text, "shortcut");
+
+  if (!canSendShortcutDanmaku(text)) {
+    showShortcutCooldown(text, getShortcutCooldownRemainingMilliseconds(text));
+    return;
+  }
+
+  const wasSent = sendParticipantDanmakuText(text, "shortcut");
+
+  if (!wasSent) {
+    return;
+  }
+
+  lastShortcutTriggerTimes.set(text, Date.now());
+  showShortcutCooldown(text, secondsToMilliseconds(CLICK_SHORTCUT_COOLDOWN_SECONDS));
+}
+
+function getShortcutCooldownRemainingMilliseconds(text) {
+  const cooldownMilliseconds = secondsToMilliseconds(CLICK_SHORTCUT_COOLDOWN_SECONDS);
+  const lastTriggerTime = lastShortcutTriggerTimes.get(text) || 0;
+  return cooldownMilliseconds - (Date.now() - lastTriggerTime);
+}
+
+function canSendShortcutDanmaku(text) {
+  return Boolean(text) && getShortcutCooldownRemainingMilliseconds(text) <= 0;
+}
+
+function showShortcutCooldown(text, milliseconds) {
+  const duration = Number(milliseconds);
+
+  if (!text || !Number.isFinite(duration) || duration <= 0) {
+    return;
+  }
+
+  const buttons = Array.from(shortcutsButtons.querySelectorAll(".shortcut-button"))
+    .filter((shortcutButton) => getDanmakuButtonText(shortcutButton) === text);
+  const coolingTargets = new Set();
+
+  buttons.forEach((shortcutButton) => {
+    const row = shortcutButton.closest(".shortcut-context-row");
+    const rowShortcutCount = row?.querySelectorAll(".shortcut-button").length || 0;
+    coolingTargets.add(row && rowShortcutCount === 1 ? row : shortcutButton);
+  });
+
+  coolingTargets.forEach((target) => {
+    target.classList.add("is-shortcut-cooling");
+  });
+
+  const previousTimer = shortcutCooldownTimers.get(text);
+
+  if (previousTimer) {
+    window.clearTimeout(previousTimer);
+  }
+
+  const timer = window.setTimeout(() => {
+    coolingTargets.forEach((target) => {
+      target.classList.remove("is-shortcut-cooling");
+    });
+    shortcutCooldownTimers.delete(text);
+  }, duration);
+
+  shortcutCooldownTimers.set(text, timer);
 }
 
 function getDanmakuButtonText(button) {
@@ -1684,6 +1752,7 @@ function stopGestureRecognition() {
   gestureResult.classList.add("hidden");
   clearGestureCardCooldowns();
   resetGestureHoldState();
+  resetGestureDebugOverlay();
   clearHandLandmarks();
 }
 
@@ -1753,11 +1822,13 @@ async function detectGestureFromCamera() {
 
     updateGestureDebug(result.debug || {});
     drawHandLandmarks(result.landmarks || [], result.connections || []);
+    updateGestureDebugOverlay(result);
     const sendState = sendGestureDanmaku(result);
     updateGestureResult(result, sendState);
   } catch (error) {
     console.warn("Gesture recognition failed:", error);
     gestureResult.classList.add("hidden");
+    resetGestureDebugOverlay();
     if (gestureDebug) {
       gestureDebug.classList.add("hidden");
     }
@@ -1898,6 +1969,38 @@ function clearGestureCardCooldowns() {
 function resetGestureHoldState() {
   currentHeldGesture = null;
   currentHeldGestureStartedAt = 0;
+}
+
+function resetGestureDebugOverlay() {
+  currentDetectedGesture = null;
+  currentDetectedGestureStartedAt = 0;
+
+  if (gestureDebugOverlay) {
+    gestureDebugOverlay.classList.add("hidden");
+    gestureDebugOverlay.textContent = "";
+  }
+}
+
+function updateGestureDebugOverlay(result) {
+  if (!gestureDebugOverlay) {
+    return;
+  }
+
+  if (!shouldRecognizeGestures() || !result.ok || !result.success || !result.gesture) {
+    resetGestureDebugOverlay();
+    return;
+  }
+
+  const now = Date.now();
+
+  if (currentDetectedGesture !== result.gesture) {
+    currentDetectedGesture = result.gesture;
+    currentDetectedGestureStartedAt = now;
+  }
+
+  const detectedMilliseconds = now - currentDetectedGestureStartedAt;
+  gestureDebugOverlay.textContent = `动作：${result.gesture}\n持续：${formatSeconds(detectedMilliseconds)}`;
+  gestureDebugOverlay.classList.remove("hidden");
 }
 
 /* 把配置里以秒为单位的时间转换成毫秒，方便和 Date.now() 的结果比较。 */
