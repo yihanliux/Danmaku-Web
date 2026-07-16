@@ -11,15 +11,6 @@
     <div class="experiment-toolbar-inner">
       <div class="experiment-toolbar-title">Experiment Setup</div>
       <div class="experiment-toolbar-actions">
-        <label class="select-button" for="videoInput">
-          Select a Video
-          <input
-            id="videoInput"
-            type="file"
-            accept="video/mp4, video/webm, video/ogg, video/*"
-          >
-        </label>
-
         <div class="condition-control" aria-label="Experiment condition">
           <div class="condition-segmented" role="group" aria-label="Experiment condition">
             <button class="condition-button is-active" type="button" data-condition-id="baseline" aria-pressed="true">
@@ -33,6 +24,15 @@
             </button>
           </div>
         </div>
+
+        <label class="select-button" for="videoInput">
+          Select a Video
+          <input
+            id="videoInput"
+            type="file"
+            accept="video/mp4, video/webm, video/ogg, video/*"
+          >
+        </label>
       </div>
     </div>
   </header>
@@ -54,7 +54,6 @@
               Your browser does not support the video tag.
             </video>
             <div id="danmakuLayer" class="danmaku-layer" aria-hidden="true"></div>
-            <div id="gestureDebugOverlay" class="gesture-debug-overlay hidden" aria-live="polite"></div>
             <div class="camera-capture" aria-hidden="true">
               <video id="cameraPreview" autoplay muted playsinline></video>
               <canvas id="handLandmarkCanvas" class="hand-landmark-canvas"></canvas>
@@ -379,6 +378,26 @@
       </div>
     </div>
   </main>
+
+  <dialog id="participantDialog" class="shortcut-dialog participant-dialog" aria-labelledby="participantDialogTitle">
+    <form id="participantDialogForm" class="shortcut-dialog-form participant-dialog-form" novalidate>
+      <h2 id="participantDialogTitle" class="shortcut-dialog-title">请输入您的ID</h2>
+      <p class="participant-dialog-hint">正式视频开始播放前需要输入您的ID。如果不清楚，请询问研究人员。</p>
+      <input
+        id="participantDialogInput"
+        class="shortcut-dialog-input"
+        type="text"
+        autocomplete="off"
+        placeholder="您的ID"
+        required
+      >
+      <p id="participantDialogVideo" class="participant-dialog-video"></p>
+      <p id="participantDialogError" class="shortcut-dialog-error" aria-live="polite"></p>
+      <div class="shortcut-dialog-actions">
+        <button class="shortcut-dialog-confirm" type="submit">确认</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="shortcutDialog" class="shortcut-dialog" aria-labelledby="shortcutDialogTitle">
     <form id="shortcutDialogForm" class="shortcut-dialog-form" novalidate>

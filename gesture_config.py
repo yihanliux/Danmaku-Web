@@ -66,14 +66,14 @@ GESTURE_DANMAKU_TEXT = {
 # 没有写在这里的动作默认不需要维持，识别到后即可发送。
 # 这个配置由前端执行：后端只返回规则，前端负责计时和冷却判断。
 GESTURE_HOLD_SECONDS = {
-    "Raising One Fist": 0.7,
-    "Thumbs-Down": 0.5,
-    "Opening Both Palms Upward": 0.5,
-    "Pressing Palms Together": 0.5,
-    "Clasping Hands": 0.5,
+    "Raising One Fist": 0.3,
+    "Thumbs-Down": 0.3,
+    "Opening Both Palms Upward": 0.2,
+    "Pressing Palms Together": 0.2,
+    "Clasping Hands": 0.2,
     "Covering Mouth": 1,
     "Touching Chin": 1,
-    "Head Shaking": 0,
+    "Head Shaking": 0.4,
 
     "Thumbs-Up": 0.5,
     "Three-Point Gesture": 0.5,
@@ -83,6 +83,27 @@ GESTURE_HOLD_SECONDS = {
     "Hands On Head": 0.3,
     "Touching Hair": 0.3,
     "Covering Face": 0.5,
+}
+
+
+GESTURE_HOLD_FRAMES = {
+    "Raising One Fist": {"minFrames": 3, "windowFrames": 4},
+    "Thumbs-Down": {"minFrames": 3, "windowFrames": 4},
+    "Opening Both Palms Upward": {"minFrames": 2, "windowFrames": 3},
+    "Pressing Palms Together": {"minFrames": 3, "windowFrames": 4},
+    "Clasping Hands": {"minFrames": 3, "windowFrames": 5},
+    "Covering Mouth": {"minFrames": 5, "windowFrames": 6},
+    "Touching Chin": {"minFrames": 5, "windowFrames": 6},
+    "Head Shaking": {"minFrames": 3, "windowFrames": 5},
+
+    "Thumbs-Up": {"minFrames": 3, "windowFrames": 4},
+    "Three-Point Gesture": {"minFrames": 3, "windowFrames": 4},
+    "Raising Both Fists": {"minFrames": 3, "windowFrames": 4},
+    "Pressing Both Hands Downward": {"minFrames": 3, "windowFrames": 4},
+    "Head Tilting": {"minFrames": 3, "windowFrames": 4},
+    "Hands On Head": {"minFrames": 3, "windowFrames": 4},
+    "Touching Hair": {"minFrames": 3, "windowFrames": 4},
+    "Covering Face": {"minFrames": 3, "windowFrames": 4},
 }
 
 
@@ -100,11 +121,16 @@ def get_cooldown_seconds(gesture):
     return GESTURE_COOLDOWN_SECONDS.get(gesture, SAME_GESTURE_COOLDOWN_SECONDS)
 
 
+def get_hold_frames(gesture):
+    return GESTURE_HOLD_FRAMES.get(gesture, {})
+
+
 def get_gesture_send_rule(gesture):
     """返回前端发送某个动作弹幕时需要遵守的规则。"""
     return {
         "cooldownSeconds": get_cooldown_seconds(gesture),
         "holdSeconds": get_hold_seconds(gesture),
+        **get_hold_frames(gesture),
     }
 
 

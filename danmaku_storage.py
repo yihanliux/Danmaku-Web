@@ -7,8 +7,8 @@ class DanmakuStorage:
     """负责保存实验参与者发送的弹幕数据。
 
     保存规则：
-    - 每个视频对应一个独立 JSONL 文件；
-    - 文件名使用“视频文件名去掉扩展名 + _participant_danmaku.jsonl”；
+    - 每个正式实验 session 对应一个独立 JSONL 文件；
+    - 文件名使用前端传来的简短 sessionName，例如 1-a-B.jsonl；
     - 每一行是一条参与者弹幕，便于后续用脚本逐行统计和分析。
     """
 
@@ -19,15 +19,16 @@ class DanmakuStorage:
     def save_participant_danmaku(self, data):
         """把一条参与者弹幕追加保存到对应视频的 jsonl 文件中。"""
         video_name = data.get("videoName") or "unknown_video"
+        session_name = data.get("sessionName") or video_name
         item = data.get("item") or {}
         time_seconds = item.get("time", 0)
 
         # 如果 experiment_data 文件夹不存在，就自动创建。
         self.data_dir.mkdir(exist_ok=True)
 
-        # 每个视频拥有自己的实验弹幕文件：
-        # 原视频名_participant_danmaku.jsonl
-        output_path = self.data_dir / f"{safe_file_stem(video_name)}_participant_danmaku.jsonl"
+        # 每个正式实验 session 拥有自己的实验弹幕文件，例如：
+        # 1-a-B.jsonl
+        output_path = self.data_dir / f"{safe_file_stem(session_name)}.jsonl"
 
         record = {
             "id": self._next_id(output_path),
@@ -100,7 +101,7 @@ def normalize_send_method(send_method):
 
     如果前端传来未知值，默认按手动输入处理，避免实验数据出现过多无效分类。
     """
-    if send_method in {"type", "gesture"}:
+    if send_method in {"type", "click", "gesture"}:
         return send_method
 
     return "type"

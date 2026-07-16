@@ -220,25 +220,6 @@ body {
   display: none;
 }
 
-.gesture-debug-overlay {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  z-index: 4;
-  min-width: 190px;
-  max-width: min(360px, calc(100% - 32px));
-  padding: 9px 12px;
-  color: #ffffff;
-  background: rgba(17, 17, 17, 0.72);
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.45;
-  text-align: left;
-  pointer-events: none;
-  white-space: pre-line;
-}
-
 /*
   弹幕显示层。
   position: absolute + inset: 0 让它完整覆盖视频区域。
@@ -1750,6 +1731,19 @@ body[data-condition="gesture-triggered"] .gesture-column {
   font-size: 20px;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.participant-dialog-hint,
+.participant-dialog-video {
+  margin: 0;
+  color: #5B6068;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.participant-dialog-video {
+  color: #36383C;
+  font-weight: 600;
 }
 
 .shortcut-dialog-input {

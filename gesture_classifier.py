@@ -43,15 +43,18 @@ BUILT_IN_GESTURE_MAP = {
 }
 
 # 各类识别阈值集中放在文件顶部，方便后面根据真实测试继续微调。
-BUILT_IN_GESTURE_SCORE_THRESHOLD = 0.55
+BUILT_IN_GESTURE_SCORE_THRESHOLD = 0.45
 TWO_HAND_GESTURE_SCORE_THRESHOLD = 0.5
 PALM_ORIENTATION_THRESHOLD = 0.03
-PALM_UP_DOWN_THRESHOLD = 0.25
+PALM_UP_DOWN_THRESHOLD = 0.20
 PALMS_TOGETHER_DISTANCE_THRESHOLD = 0.85
 PALMS_TOGETHER_DIRECTION_THRESHOLD = 0.55
 CLASPED_HANDS_CENTER_DISTANCE_THRESHOLD = 1.35
 CLASPED_HANDS_FINGER_DISTANCE_THRESHOLD = 0.75
 CLASPED_HANDS_MIN_FOLDED_FINGERS = 4
+CLASPED_HANDS_STRONG_CENTER_DISTANCE_THRESHOLD = 1.05
+CLASPED_HANDS_STRONG_FINGER_DISTANCE_THRESHOLD = 0.45
+CLASPED_HANDS_STRONG_MIN_FOLDED_FINGERS = 1
 
 # MediaPipe 手部 landmark 编号。这里保留 hand/finger 命名，
 # 因为这些常量确实只描述手部关键点，不是通用 pose 关键点。
@@ -97,11 +100,11 @@ HEAD_TILT_ANGLE_THRESHOLD = 20
 # 这里不用单帧姿态，而是记录 nose 相对双耳中心的横向偏移：
 #   head_yaw = (nose.x - 双耳中心.x) / 双耳距离
 # 正负号表示鼻子偏向左右哪一侧，绝对值表示偏移幅度。
-HEAD_SHAKE_WINDOW_SECONDS = 3
-HEAD_SHAKE_MIN_SAMPLES = 6
-HEAD_SHAKE_YAW_THRESHOLD = 0.035
-HEAD_SHAKE_RANGE_THRESHOLD = 0.09
-HEAD_SHAKE_MIN_DIRECTION_CHANGES = 4
+HEAD_SHAKE_WINDOW_SECONDS = 5
+HEAD_SHAKE_MIN_SAMPLES = 5
+HEAD_SHAKE_YAW_THRESHOLD = 0.045
+HEAD_SHAKE_RANGE_THRESHOLD = 0.18
+HEAD_SHAKE_MIN_DIRECTION_CHANGES = 3
 
 # Covering Face / Covering Mouth 使用的距离都不是像素距离，而是归一化距离。
 # 归一化使用的尺度是 face_scale：
@@ -157,13 +160,13 @@ FACE_COVER_ABOVE_TARGET_THRESHOLD = -0.3
 # 值越大：越宽松，如果真实捂眼/捂嘴时手指或手腕经常偏低，可以适当调大。
 FACE_COVER_BELOW_TARGET_THRESHOLD = 0.3
 MOUTH_COVER_ABOVE_TARGET_THRESHOLD = -0.02
-MOUTH_COVER_DISTANCE_THRESHOLD = 0.62
+MOUTH_COVER_DISTANCE_THRESHOLD = 0.58
 MOUTH_COVER_VERY_CLOSE_THRESHOLD = 0.42
 MOUTH_COVER_HORIZONTAL_THRESHOLD = 1.05
 MOUTH_COVER_VERTICAL_ABOVE_THRESHOLD = -0.55
 MOUTH_COVER_VERTICAL_BELOW_THRESHOLD = 0.45
-MOUTH_COVER_MIN_POINTS = 2
-MOUTH_COVER_MIN_CORE_POINTS = 1
+MOUTH_COVER_MIN_POINTS = 3
+MOUTH_COVER_MIN_CORE_POINTS = 2
 MOUTH_COVER_CORE_POINTS = (THUMB_TIP, INDEX_TIP, INDEX_MCP, MIDDLE_MCP, MIDDLE_TIP)
 
 # “眼睛/嘴巴可能被遮挡”的 visibility 阈值。
@@ -179,22 +182,22 @@ FACE_COVER_VISIBILITY_THRESHOLD = 0.25
 CHIN_CENTER_VERTICAL_OFFSET = 0.55
 
 # 手部候选点到估算下巴中心的最大归一化距离。
-CHIN_TOUCH_DISTANCE_THRESHOLD = 0.65
+CHIN_TOUCH_DISTANCE_THRESHOLD = 0.58
 CHIN_TOUCH_RELAXED_DISTANCE_THRESHOLD = 1.2
 CHIN_TOUCH_SUPPORT_DISTANCE_THRESHOLD = 0.92
 CHIN_TOUCH_SUPPORT_CONTACT_THRESHOLD = 0.65
-CHIN_TOUCH_MIN_SUPPORT_POINTS = 3
+CHIN_TOUCH_MIN_SUPPORT_POINTS = 4
 
 # 手部候选点相对下巴中心允许的最大横向偏移。
-CHIN_TOUCH_HORIZONTAL_THRESHOLD = 0.75
+CHIN_TOUCH_HORIZONTAL_THRESHOLD = 0.65
 
 # 手部候选点相对下巴中心允许的最大纵向偏移。
-CHIN_TOUCH_VERTICAL_THRESHOLD = 0.55
+CHIN_TOUCH_VERTICAL_THRESHOLD = 0.48
 CHIN_TOUCH_RELAXED_VERTICAL_THRESHOLD = 1.1
 
 # 手部候选点至少需要位于嘴巴中心下方多少，避免捂嘴被判定为摸下巴。
-CHIN_TOUCH_MIN_BELOW_MOUTH = 0.15
-CHIN_TOUCH_PALM_MIN_BELOW_MOUTH = 0.35
+CHIN_TOUCH_MIN_BELOW_MOUTH = 0.25
+CHIN_TOUCH_PALM_MIN_BELOW_MOUTH = 0.45
 CHIN_TWO_HAND_CLOSE_DISTANCE_THRESHOLD = 1.65
 CHIN_MOUTH_BLOCK_DISTANCE_THRESHOLD = 0.62
 CHIN_MOUTH_BLOCK_MAX_BELOW_MOUTH = 0.35
@@ -278,7 +281,7 @@ class GestureClassifier:
         if resource_dir:
             resource_util.set_resource_dir(resource_dir)
 
-    def classify_frame(self, image_data, allowed_gestures=None):
+    def classify_frame(self, image_data, allowed_gestures=None, include_debug=False):
         """识别一帧摄像头画面，并返回前端需要的 JSON 友好数据。
 
         识别顺序是有意安排的：
@@ -291,28 +294,38 @@ class GestureClassifier:
         """
         allowed_gesture_set = self._normalize_allowed_gestures(allowed_gestures)
         image = self._decode_image(image_data)
-        image_debug = self._image_debug(image)
+        image_debug = self._image_debug(image) if include_debug else None
 
         # OpenCV 解码得到的是 BGR，MediaPipe 需要 SRGB/RGB。
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.ascontiguousarray(rgb_image))
 
-        # 同一帧图像同时送入手势模型和姿势模型。
-        # 注意：这里不再因为“没有检测到手”就提前返回，因为 pose 动作可能完全不需要手。
+        # 先跑手部模型。PoseLandmarker 比较重，只有手部规则没有命中时才继续运行。
         hand_result = self.recognizer.recognize(mp_image)
-        pose_result = self.pose_landmarker.detect(mp_image)
 
         landmarks = hand_result.hand_landmarks[0] if hand_result.hand_landmarks else None
         landmark_points = self._all_landmark_points(hand_result.hand_landmarks)
         connections = self._connections_for_hand_count(len(hand_result.hand_landmarks))
         gesture = (
-            self._recognize_face_cover_gesture(pose_result, hand_result.hand_landmarks, allowed_gesture_set)
-            or self._recognize_two_hand_gesture(hand_result, allowed_gesture_set)
+            self._recognize_two_hand_gesture(hand_result, allowed_gesture_set)
             or self._recognize_built_in_gesture(hand_result, allowed_gesture_set)
             or self._recognize_custom_gesture(hand_result.hand_landmarks, allowed_gesture_set)
-            or self._recognize_pose_gesture(pose_result, hand_result.hand_landmarks, allowed_gesture_set)
         )
-        debug = self._debug_result(hand_result, pose_result, landmarks, image_debug=image_debug)
+
+        if gesture:
+            pose_result = self._empty_pose_result()
+        else:
+            pose_result = self.pose_landmarker.detect(mp_image)
+            gesture = (
+                self._recognize_face_cover_gesture(pose_result, hand_result.hand_landmarks, allowed_gesture_set)
+                or self._recognize_pose_gesture(pose_result, hand_result.hand_landmarks, allowed_gesture_set)
+            )
+
+        debug = (
+            self._debug_result(hand_result, pose_result, landmarks, image_debug=image_debug)
+            if include_debug
+            else {}
+        )
 
         if gesture:
             return self._result(
@@ -334,6 +347,9 @@ class GestureClassifier:
             for gesture in allowed_gestures
             if isinstance(gesture, str) and gesture
         }
+
+    def _empty_pose_result(self):
+        return SimpleNamespace(pose_landmarks=[])
 
     def _can_recognize_gesture(self, gesture, allowed_gestures=None):
         if not gesture or not is_gesture_enabled(gesture):
@@ -514,10 +530,11 @@ class GestureClassifier:
         if self._can_recognize_gesture("Touching Hair", allowed_gestures) and touching_hair["matched"]:
             return "Touching Hair"
 
-        head_shaking = self._head_shaking_debug(pose_result)
+        if not hand_landmarks:
+            head_shaking = self._head_shaking_debug(pose_result)
 
-        if self._can_recognize_gesture("Head Shaking", allowed_gestures) and head_shaking["matched"]:
-            return "Head Shaking"
+            if self._can_recognize_gesture("Head Shaking", allowed_gestures) and head_shaking["matched"]:
+                return "Head Shaking"
 
         head_tilt = self._head_tilt_debug(pose_result)
 
@@ -1734,20 +1751,34 @@ class GestureClassifier:
         center_distance = self._distance_2d(first_hand[MIDDLE_MCP], second_hand[MIDDLE_MCP]) / (average_scale or 1)
         folded_finger_count = self._folded_finger_count(first_hand) + self._folded_finger_count(second_hand)
         finger_proximity = self._finger_proximity_score(first_hand, second_hand, average_scale)
-        matched = (
+        palms_together = self._palms_together_debug(hand_landmarks)
+        standard_matched = (
             center_distance <= CLASPED_HANDS_CENTER_DISTANCE_THRESHOLD
             and finger_proximity <= CLASPED_HANDS_FINGER_DISTANCE_THRESHOLD
             and folded_finger_count >= CLASPED_HANDS_MIN_FOLDED_FINGERS
         )
+        strong_proximity_matched = (
+            not palms_together["matched"]
+            and center_distance <= CLASPED_HANDS_STRONG_CENTER_DISTANCE_THRESHOLD
+            and finger_proximity <= CLASPED_HANDS_STRONG_FINGER_DISTANCE_THRESHOLD
+            and folded_finger_count >= CLASPED_HANDS_STRONG_MIN_FOLDED_FINGERS
+        )
+        matched = standard_matched or strong_proximity_matched
 
         return {
             "matched": matched,
+            "standardMatched": standard_matched,
+            "strongProximityMatched": strong_proximity_matched,
             "centerDistance": center_distance,
             "centerDistanceThreshold": CLASPED_HANDS_CENTER_DISTANCE_THRESHOLD,
+            "strongCenterDistanceThreshold": CLASPED_HANDS_STRONG_CENTER_DISTANCE_THRESHOLD,
             "fingerProximity": finger_proximity,
             "fingerProximityThreshold": CLASPED_HANDS_FINGER_DISTANCE_THRESHOLD,
+            "strongFingerProximityThreshold": CLASPED_HANDS_STRONG_FINGER_DISTANCE_THRESHOLD,
             "foldedFingerCount": folded_finger_count,
             "minFoldedFingerCount": CLASPED_HANDS_MIN_FOLDED_FINGERS,
+            "strongMinFoldedFingerCount": CLASPED_HANDS_STRONG_MIN_FOLDED_FINGERS,
+            "palmsTogetherMatched": palms_together["matched"],
         }
 
     def _palms_together_debug(self, hand_landmarks):
