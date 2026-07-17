@@ -65,6 +65,8 @@ const participantDialogError = document.getElementById("participantDialogError")
 const DANMAKU_API_URL = getDanmakuApiUrl();
 const GESTURE_API_URL = getGestureApiUrl();
 const CAMERA_RECORDING_API_URL = getCameraRecordingApiUrl();
+const MANUAL_GESTURE_API_URL = getManualGestureApiUrl();
+const MANUAL_GESTURE_CONTROL_ENABLED = true;
 
 const EXPERIMENT_CONDITIONS = [
   {
@@ -1199,6 +1201,7 @@ function confirmGestureSetup() {
   });
 
   isGestureSetupMode = false;
+  publishManualGestureConfig();
   updateGestureSetupUi();
   updatePlaybackAvailability();
 }
@@ -1689,6 +1692,111 @@ function getCameraRecordingApiUrl() {
   return "http://localhost:8000/api/camera-recording";
 }
 
+function getManualGestureApiUrl() {
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    return "/api/manual-gesture";
+  }
+  return "http://localhost:8000/api/manual-gesture";
+}
+
+let manualGestureEventCursor = 0;
+let manualGesturePollTimer = null;
+let manualGesturePollRunning = false;
+
+async function publishManualGestureConfig() {
+  if (!MANUAL_GESTURE_CONTROL_ENABLED) {
+    return;
+  }
+  const gestures = getGestureCards().map((card) => ({
+    gesture: card.dataset.gesture,
+    label: card.querySelector(".gesture-action-label")?.textContent.trim() || card.dataset.gesture,
+    danmaku: selectedGestureDanmakuByGesture.get(card.dataset.gesture) || "",
+    imageUrl: card.querySelector(".gesture-action-image")?.getAttribute("src") || "",
+  }));
+
+  try {
+    const response = await fetch(`${MANUAL_GESTURE_API_URL}/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gestures }),
+    });
+    const result = await response.json();
+    manualGestureEventCursor = Number(result.eventCursor) || 0;
+    startManualGesturePolling();
+    updateGestureRecognitionState();
+  } catch (error) {
+    console.warn("Could not publish tablet gesture configuration:", error);
+  }
+}
+
+async function publishGestureCooldownState() {
+  const cooldowns = {};
+  lastGestureTriggerTimes.forEach((triggeredAt, gesture) => {
+    const duration = gestureCooldownMillisecondsByGesture.get(gesture)
+      ?? secondsToMilliseconds(DEFAULT_GESTURE_COOLDOWN_SECONDS);
+    cooldowns[gesture] = triggeredAt + duration;
+  });
+  try {
+    await fetch(`${MANUAL_GESTURE_API_URL}/cooldowns`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cooldowns }),
+    });
+  } catch (error) {
+    console.warn("Could not publish gesture cooldown state:", error);
+  }
+}
+
+function sendManualGestureDanmaku(gesture) {
+  const text = selectedGestureDanmakuByGesture.get(gesture) || "";
+  if (!text) {
+    return false;
+  }
+  const now = Date.now();
+  const cooldownMilliseconds = gestureCooldownMillisecondsByGesture.get(gesture)
+    ?? secondsToMilliseconds(DEFAULT_GESTURE_COOLDOWN_SECONDS);
+  const lastTriggerTime = lastGestureTriggerTimes.get(gesture) || 0;
+  const remaining = cooldownMilliseconds - (now - lastTriggerTime);
+  if (remaining > 0) {
+    showGestureCardCooldown(gesture, remaining);
+    publishGestureCooldownState();
+    return false;
+  }
+  lastGestureTriggerTimes.set(gesture, now);
+  sendParticipantDanmakuText(text, "manual-gesture");
+  showGestureCardCooldown(gesture, cooldownMilliseconds);
+  publishGestureCooldownState();
+  return true;
+}
+
+function startManualGesturePolling() {
+  if (manualGesturePollTimer) {
+    return;
+  }
+  manualGesturePollTimer = window.setInterval(pollManualGestureEvents, 250);
+}
+
+async function pollManualGestureEvents() {
+  if (!MANUAL_GESTURE_CONTROL_ENABLED || isGestureSetupMode || manualGesturePollRunning) {
+    return;
+  }
+  manualGesturePollRunning = true;
+  try {
+    const response = await fetch(`${MANUAL_GESTURE_API_URL}/events?after=${manualGestureEventCursor}`, {
+      cache: "no-store",
+    });
+    const result = await response.json();
+    (result.events || []).forEach((event) => {
+      manualGestureEventCursor = Math.max(manualGestureEventCursor, Number(event.id) || 0);
+      sendManualGestureDanmaku(event.gesture);
+    });
+  } catch (error) {
+    console.warn("Tablet gesture polling failed:", error);
+  } finally {
+    manualGesturePollRunning = false;
+  }
+}
+
 
 async function loadDanmakuForVideo(videoFileName) {
   clearDanmakuPlaybackState();
@@ -2083,6 +2191,7 @@ function sendGestureDanmaku(result) {
 
   lastGestureTriggerTimes.set(gesture, now);
   sendParticipantDanmakuText(text, "gesture");
+  publishGestureCooldownState();
   return { sent: true, gesture, danmakuText: text, cooldownMilliseconds };
 }
 

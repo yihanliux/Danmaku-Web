@@ -1,7 +1,11 @@
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import json
+import threading
+import time
+from collections import deque
 from urllib.parse import unquote
+from urllib.parse import parse_qs, urlparse
 
 from danmaku_storage import DanmakuStorage, safe_file_stem
 from gesture_classifier import GestureClassifier
@@ -12,13 +16,118 @@ from gesture_classifier import GestureClassifier
 ROOT = Path(__file__).resolve().parent
 DANMAKU_DATA_DIR = ROOT / "Danmaku_data"
 VIDEO_DATA_DIR = ROOT / "video_data"
-HOST = "127.0.0.1"
-PORT = 8000
+HOST = "0.0.0.0"
+PORT = 8001
+
+
+class GestureInferenceMetrics:
+    """Tracks completed gesture inferences as a rolling three-second average."""
+
+    WINDOW_SECONDS = 3.0
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._completed_at = deque()
+
+    def record_completion(self):
+        now = time.monotonic()
+        with self._lock:
+            self._completed_at.append(now)
+            self._prune(now)
+
+    def get_fps(self):
+        now = time.monotonic()
+        with self._lock:
+            self._prune(now)
+            return round(len(self._completed_at) / self.WINDOW_SECONDS, 1)
+
+    def _prune(self, now):
+        cutoff = now - self.WINDOW_SECONDS
+        while self._completed_at and self._completed_at[0] < cutoff:
+            self._completed_at.popleft()
+
+
+class ManualGestureChannel:
+    """In-memory bridge between the laptop page and the Android tablet."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._config = {"revision": 0, "gestures": []}
+        self._events = []
+        self._next_event_id = 1
+        self._cooldowns = {}
+
+    def set_config(self, gestures):
+        if not isinstance(gestures, list):
+            raise ValueError("gestures must be a list")
+        cleaned = []
+        for item in gestures[:6]:
+            if not isinstance(item, dict):
+                continue
+            gesture = str(item.get("gesture", "")).strip()
+            if not gesture:
+                continue
+            cleaned.append({
+                "gesture": gesture,
+                "label": str(item.get("label", gesture)).strip() or gesture,
+                "danmaku": str(item.get("danmaku", "")).strip(),
+                "imageUrl": str(item.get("imageUrl", "")).strip(),
+            })
+        with self._lock:
+            self._events.clear()
+            self._cooldowns.clear()
+            self._config = {
+                "revision": self._config["revision"] + 1,
+                "eventCursor": self._next_event_id - 1,
+                "gestures": cleaned,
+            }
+            return dict(self._config)
+
+    def get_config(self):
+        with self._lock:
+            return {
+                **self._config,
+                "gestures": list(self._config["gestures"]),
+                "cooldowns": dict(self._cooldowns),
+                "serverTime": int(time.time() * 1000),
+            }
+
+    def set_cooldowns(self, cooldowns):
+        if not isinstance(cooldowns, dict):
+            raise ValueError("cooldowns must be an object")
+        with self._lock:
+            allowed = {item["gesture"] for item in self._config["gestures"]}
+            self._cooldowns = {
+                str(gesture): int(until)
+                for gesture, until in cooldowns.items()
+                if str(gesture) in allowed and isinstance(until, (int, float))
+            }
+            return dict(self._cooldowns)
+
+    def add_event(self, gesture):
+        gesture = str(gesture or "").strip()
+        if not gesture:
+            raise ValueError("gesture is required")
+        with self._lock:
+            allowed = {item["gesture"] for item in self._config["gestures"]}
+            if gesture not in allowed:
+                raise ValueError("gesture is not in the active tablet configuration")
+            event = {"id": self._next_event_id, "gesture": gesture, "createdAt": int(time.time() * 1000)}
+            self._next_event_id += 1
+            self._events.append(event)
+            self._events = self._events[-100:]
+            return event
+
+    def events_after(self, event_id):
+        with self._lock:
+            return [dict(event) for event in self._events if event["id"] > event_id]
 
 # DanmakuStorage 只负责落盘参与者弹幕；GestureClassifier 只负责识别单帧摄像头画面。
 # 这里提前创建实例，避免每个请求都重复初始化模型或目录对象。
 storage = DanmakuStorage(DANMAKU_DATA_DIR)
 gesture_classifier = GestureClassifier()
+manual_gesture_channel = ManualGestureChannel()
+gesture_inference_metrics = GestureInferenceMetrics()
 
 
 class ExperimentHandler(SimpleHTTPRequestHandler):
@@ -38,6 +147,24 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/manual-gesture/config":
+            self.send_json(200, {
+                "ok": True,
+                **manual_gesture_channel.get_config(),
+                "inferenceFps": gesture_inference_metrics.get_fps(),
+            })
+            return
+        if parsed.path == "/api/manual-gesture/events":
+            try:
+                after = int(parse_qs(parsed.query).get("after", ["0"])[0])
+            except ValueError:
+                after = 0
+            self.send_json(200, {"ok": True, "events": manual_gesture_channel.events_after(after)})
+            return
+        super().do_GET()
+
     def do_POST(self):
         # /api/danmaku 保存参与者弹幕，/api/gesture 识别摄像头单帧图像。
         # 其他 POST 路径都不是本实验接口，直接返回 404。
@@ -51,6 +178,30 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
 
         if self.path == "/api/camera-recording":
             self.handle_camera_recording_request()
+            return
+
+        if self.path == "/api/manual-gesture/config":
+            try:
+                config = manual_gesture_channel.set_config(self.read_json_body().get("gestures", []))
+                self.send_json(200, {"ok": True, **config})
+            except Exception as error:
+                self.send_json(400, {"ok": False, "error": str(error)})
+            return
+
+        if self.path == "/api/manual-gesture/trigger":
+            try:
+                event = manual_gesture_channel.add_event(self.read_json_body().get("gesture"))
+                self.send_json(200, {"ok": True, "event": event})
+            except Exception as error:
+                self.send_json(400, {"ok": False, "error": str(error)})
+            return
+
+        if self.path == "/api/manual-gesture/cooldowns":
+            try:
+                cooldowns = manual_gesture_channel.set_cooldowns(self.read_json_body().get("cooldowns", {}))
+                self.send_json(200, {"ok": True, "cooldowns": cooldowns})
+            except Exception as error:
+                self.send_json(400, {"ok": False, "error": str(error)})
             return
 
         self.send_error(404, "Unknown API endpoint")
@@ -93,6 +244,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
                 data.get("image", ""),
                 allowed_gestures=data.get("allowedGestures"),
             )
+            gesture_inference_metrics.record_completion()
         except Exception as error:
             self.send_json(400, {
                 "ok": False,
@@ -194,7 +346,7 @@ class ExperimentHandler(SimpleHTTPRequestHandler):
 def run_server():
     """启动本地网页服务器。"""
     server = ThreadingHTTPServer((HOST, PORT), ExperimentHandler)
-    print(f"Serving at http://{HOST}:{PORT}")
+    print(f"Serving at http://127.0.0.1:{PORT} (LAN access enabled)")
     print(f"Participant danmaku data will be saved in: {DANMAKU_DATA_DIR}")
     print(f"Camera recordings will be saved in: {VIDEO_DATA_DIR}")
     server.serve_forever()

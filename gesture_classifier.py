@@ -56,6 +56,14 @@ CLASPED_HANDS_STRONG_CENTER_DISTANCE_THRESHOLD = 1.05
 CLASPED_HANDS_STRONG_FINGER_DISTANCE_THRESHOLD = 0.45
 CLASPED_HANDS_STRONG_MIN_FOLDED_FINGERS = 1
 
+# 双手重叠时，MediaPipe 可能短暂只返回一只手。最近识别到合掌、十指紧握，
+# 或两只手整体靠近后，在这段时间内不允许 Covering Mouth 接管结果。
+TWO_HAND_MOUTH_LOCK_SECONDS = 0.75
+MOUTH_BLOCKING_TWO_HAND_GESTURES = {
+    "Pressing Palms Together",
+    "Clasping Hands",
+}
+
 # MediaPipe 手部 landmark 编号。这里保留 hand/finger 命名，
 # 因为这些常量确实只描述手部关键点，不是通用 pose 关键点。
 FINGER_JOINTS = {
@@ -189,7 +197,7 @@ CHIN_TOUCH_SUPPORT_CONTACT_THRESHOLD = 0.65
 CHIN_TOUCH_MIN_SUPPORT_POINTS = 4
 
 # 手部候选点相对下巴中心允许的最大横向偏移。
-CHIN_TOUCH_HORIZONTAL_THRESHOLD = 0.65
+CHIN_TOUCH_HORIZONTAL_THRESHOLD = 0.70
 
 # 手部候选点相对下巴中心允许的最大纵向偏移。
 CHIN_TOUCH_VERTICAL_THRESHOLD = 0.48
@@ -241,6 +249,8 @@ class GestureClassifier:
         self._set_resource_dir()
         self.head_shake_samples = deque()
         self.last_head_shake_sample_at = 0
+        self.last_two_hand_mouth_block_at = 0
+        self.last_two_hand_mouth_block_reason = None
 
         # 前端只画手部关键点，所以这里保存 hand landmark 的连接关系。
         # 如果以后也想在前端画身体骨架，可以再增加 pose connections。
@@ -311,6 +321,7 @@ class GestureClassifier:
             or self._recognize_built_in_gesture(hand_result, allowed_gesture_set)
             or self._recognize_custom_gesture(hand_result.hand_landmarks, allowed_gesture_set)
         )
+        self._update_two_hand_mouth_lock(hand_result.hand_landmarks, gesture)
 
         if gesture:
             pose_result = self._empty_pose_result()
@@ -627,6 +638,28 @@ class GestureClassifier:
                 "reason": "noPose",
             }
 
+        hand_count = len(hand_landmarks or [])
+
+        # Covering Mouth 必须有明确的单手证据。检测到两只手时，无论它们是否刚好
+        # 满足某个双手动作，都不能仅凭“嘴边有手”判成捂嘴。
+        if hand_count != 1 or len(hand_landmarks[0]) < 21:
+            return {
+                "matched": False,
+                "reason": "requiresExactlyOneCompleteHand",
+                "handCount": hand_count,
+            }
+
+        mouth_lock = self._two_hand_mouth_lock_debug()
+
+        # 双手重叠会让模型短暂从两只手掉成一只手。保留最近的双手证据，
+        # 避免这段检测抖动被 Covering Mouth 接管。
+        if mouth_lock["locked"]:
+            return {
+                "matched": False,
+                "reason": "blockedByRecentTwoHandEvidence",
+                "twoHandMouthLock": mouth_lock,
+            }
+
         palms_together = self._palms_together_debug(hand_landmarks or [])
 
         if palms_together["matched"]:
@@ -707,6 +740,44 @@ class GestureClassifier:
             "mouthCenter": self._point_debug(mouth_center),
             "mouthTargets": [self._point_debug(point) for point in mouth_targets],
             "visibility": mouth_visibility,
+            "twoHandMouthLock": mouth_lock,
+        }
+
+    def _update_two_hand_mouth_lock(self, hand_landmarks, gesture=None, now=None):
+        """记录会和 Covering Mouth 冲突的近期双手证据。"""
+        if not self._has_two_complete_hands(hand_landmarks):
+            return False
+
+        reason = None
+
+        if gesture in MOUTH_BLOCKING_TWO_HAND_GESTURES:
+            reason = gesture
+        elif self._palms_together_debug(hand_landmarks)["matched"]:
+            reason = "palmsTogetherGeometry"
+        elif self._clasped_hands_debug(hand_landmarks)["matched"]:
+            reason = "claspedHandsGeometry"
+        elif self._chin_two_hands_close_debug(hand_landmarks)["matched"]:
+            reason = "twoHandsCloseGeometry"
+
+        if reason is None:
+            return False
+
+        self.last_two_hand_mouth_block_at = time.monotonic() if now is None else now
+        self.last_two_hand_mouth_block_reason = reason
+        return True
+
+    def _two_hand_mouth_lock_debug(self, now=None):
+        """返回 Covering Mouth 的双手迟滞锁状态。"""
+        current_time = time.monotonic() if now is None else now
+        last_block_at = getattr(self, "last_two_hand_mouth_block_at", 0)
+        elapsed = current_time - last_block_at if last_block_at else None
+        locked = elapsed is not None and 0 <= elapsed < TWO_HAND_MOUTH_LOCK_SECONDS
+
+        return {
+            "locked": locked,
+            "reason": getattr(self, "last_two_hand_mouth_block_reason", None),
+            "elapsedSeconds": elapsed,
+            "lockSeconds": TWO_HAND_MOUTH_LOCK_SECONDS,
         }
 
     def _touching_chin_debug(self, pose_result, hand_landmarks=None, allowed_gestures=None):
@@ -785,16 +856,11 @@ class GestureClassifier:
                 "visibility": mouth_visibility,
             }
 
+        # 真实摸下巴时，拇指或食指经常自然靠近嘴角。旧逻辑只要任意一个手部点
+        # 靠近嘴巴就直接拦截，实测会把大量有效摸下巴帧误判成捂嘴。
+        # 上面的 mouth_cover_candidate 已经使用多点、方向和区域约束排除了真正捂嘴，
+        # 因此这里保留 mouthBlocker 作为调试信息，但不再把单点靠近嘴巴当成否决条件。
         mouth_blocker = self._chin_mouth_blocker_debug(hand_landmarks or [], mouth_center, face_scale)
-        if mouth_blocker["matched"]:
-            return {
-                "matched": False,
-                "reason": "blockedByHandNearMouth",
-                "mouthBlocker": mouth_blocker,
-                "visibility": mouth_visibility,
-                "mouthCenter": self._point_debug(mouth_center),
-                "chinCenter": self._point_debug(chin_center),
-            }
 
         left_debug = self._pose_wrist_chin_debug(
             landmarks[LEFT_WRIST_POSE],
